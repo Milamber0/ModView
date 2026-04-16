@@ -161,6 +161,10 @@ BOOL CModViewDoc::OnOpenDocument(LPCTSTR lpszPathName)
 		strLastRealDocName = lpszPathName;
 		strLastRealDocName.Replace("/","\\");
 		SetPathName(strLastRealDocName, true);
+
+		// Restore saved scene state (camera, skin, animation, bolts, sabers)
+		SceneState_Restore(lpszPathName);
+
 		return true;
 	}
 	// model existed, but had some sort of error...
