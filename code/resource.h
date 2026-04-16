@@ -182,6 +182,36 @@
 #define ID_ANIMATION_15FPS		        32939
 #define ID_ANIMATION_20FPS	            32940
 #define ID_ANIMATION_40FPS	            32941
+#define ID_ANIMATION_SHADERS            32942
+#define ID_VIEW_SHADERS                 32943
+#define ID_SEQUENCES_FIND               32944
+#define ID_VIEW_ENTITYCOLOR             32945
+#define ID_SEQUENCES_SEARCH             32946
+#define ID_VIEW_DYNAMICGLOW             32947
+#define ID_VIEW_DYNAMICGLOWSOFT         32948
+#define ID_VIEW_GLOWFULLBRIGHTCOMP      32949
+#define ID_VIEW_WEAPONS                 32950
+#define ID_WEAPON_REMOVEALL             32951
+#define IDD_WEAPON_DIALOG               162
+#define IDC_WEAPON_LIST                 1020
+#define IDC_WEAPON_RHAND                1021
+#define IDC_WEAPON_LHAND                1022
+#define IDC_WEAPON_RHIP                 1023
+#define IDC_WEAPON_LHIP                 1024
+#define IDC_WEAPON_BACK                 1025
+#define IDC_WEAPON_REMOVE_ALL           1026
+#define IDC_SABER_RBLADE                1027
+#define IDC_SABER_LBLADE                1028
+#define IDC_SABER_RCOLOR                1029
+#define IDC_SABER_LCOLOR                1030
+#define IDC_SABER_RCOMBO                1031
+#define IDC_SABER_LCOMBO                1032
+#define ID_WEAPON_FIRST                 33000
+#define ID_WEAPON_LAST                  33500
+#define IDD_ANIM_SEARCH                 161
+#define IDC_ANIM_SEARCH_EDIT            1010
+#define IDC_ANIM_SEARCH_LIST            1011
+#define IDR_SHADER_TOOLBAR              160
 
 // Next default values for new objects
 // 
