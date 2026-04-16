@@ -103,6 +103,7 @@ BEGIN_MESSAGE_MAP(CModViewTreeView, CTreeView)
 	ON_COMMAND(ID_BONES_FIND, OnBonesFind)
 	ON_COMMAND(ID_FIND_NEXT, OnFindNext)
 	ON_COMMAND(ID_MODEL_FINDANY, OnModelFindany)
+	ON_COMMAND(ID_SEQUENCES_FIND, OnSequencesFind)
 	ON_COMMAND(ID_SEQUENCES_VIEWFULLPATH, OnSequencesViewfullpath)
 	ON_UPDATE_COMMAND_UI(ID_ETHNIC_APPLYWITHSURFACES, OnUpdateEthnicApplywithsurfaces)
 	ON_COMMAND(ID_ETHNIC_APPLYWITHSURFACES, OnEthnicApplywithsurfaces)
@@ -1258,9 +1259,30 @@ void CModViewTreeView::OnSurfacesFind()
 	}
 }
 
-void CModViewTreeView::OnBonesFind() 
+void CModViewTreeView::OnBonesFind()
 {
 	LPCSTR psSearch = GetString("Enter Bone name to search for...\n\n( Case insensitive, partial strings ok )");
+
+	if (psSearch)
+	{
+		strTreeItemTextToFind	= psSearch;
+		ghTreeItemFound			= NULL;
+		ghTreeItemHeader		= ghTreeItem_RButtonMenu;
+		ghTreeCurrentFind		= NULL;
+
+		R_ApplyToTreeItem( ::SearchTreeItem, ghTreeItemHeader );
+
+		if (ghTreeItemFound)
+		{
+			GetTreeCtrl().SelectSetFirstVisible(ghTreeItemFound);
+			GetTreeCtrl().SelectItem(ghTreeItemFound);
+		}
+	}
+}
+
+void CModViewTreeView::OnSequencesFind()
+{
+	LPCSTR psSearch = GetString("Enter Sequence/Animation name to search for...\n\n( Case insensitive, partial strings ok )");
 
 	if (psSearch)
 	{

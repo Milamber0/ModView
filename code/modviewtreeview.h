@@ -114,6 +114,7 @@ protected:
 	afx_msg void OnBonesFind();
 	afx_msg void OnFindNext();
 	afx_msg void OnModelFindany();
+	afx_msg void OnSequencesFind();
 	afx_msg void OnSequencesViewfullpath();
 	afx_msg void OnUpdateEthnicApplywithsurfaces(CCmdUI* pCmdUI);
 	afx_msg void OnEthnicApplywithsurfaces();
