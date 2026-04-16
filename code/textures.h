@@ -31,6 +31,7 @@ TextureHandle_t TextureHandle_ForName(LPCSTR psLocalTexturePath);
 GLuint Texture_GetGLBind( TextureHandle_t thHandle);
 Texture_t *Texture_GetTextureData( TextureHandle_t thHandle );
 int  Texture_Load( LPCSTR psLocalTexturePath, bool bInhibitStatus = false );
+int  Texture_LoadDirect( LPCSTR psLocalTexturePath );	// loads image by path, skips shader text lookup
 
 
 void FakeCvars_Shutdown(void);

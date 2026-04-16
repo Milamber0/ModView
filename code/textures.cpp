@@ -975,7 +975,7 @@ static TextureHandle_t Texture_Load_Actual( LPCSTR psLocalTexturePath)
 	TextureList_EnsureOneBad();
 
 	ScanAndLoadShaderFiles();	// checked internally if already done
-	psLocalTexturePath = R_FindShader( psLocalTexturePath );
+	psLocalTexturePath = R_FindShaderTextureName( psLocalTexturePath );
 
 	if (!psLocalTexturePath || !strlen(psLocalTexturePath))
 		return 0;
@@ -1066,6 +1066,56 @@ TextureHandle_t Texture_Load( LPCSTR psLocalTexturePath, bool bInhibitStatus /* 
 	return hTexture;
 }
 
+
+// Load a texture directly by image path, without going through shader text lookup.
+// Used by the shader parser to avoid re-entering the parser (shared global state).
+TextureHandle_t Texture_LoadDirect( LPCSTR psLocalTexturePath )
+{
+	TextureList_EnsureOneBad();
+
+	if (!psLocalTexturePath || !strlen(psLocalTexturePath))
+		return 0;
+
+	// check for any cached versions
+	string strTextureName = String_ToLower(Filename_WithoutExt(psLocalTexturePath));
+	TextureHandle_t hTexture = TextureHandle_ForName(strTextureName.c_str());
+	if (hTexture != -1)
+	{
+		TheTextures[hTexture].iUsageCount++;
+		return hTexture;
+	}
+
+	// load the image
+	Texture_t Texture = {0};
+	R_LoadImage( psLocalTexturePath, &Texture.pPixels, &Texture.iWidth, &Texture.iHeight );
+
+	Texture.iUsageCount = 1;
+	strncpy(Texture.sName, strTextureName.c_str(), sizeof(Texture.sName));
+	Texture.sName[sizeof(Texture.sName)-1] = '\0';
+
+	char sExt[20] = {0};
+	LPCSTR p = strrchr(psLocalTexturePath, '.');
+	if (p) strncpy(sExt, p, sizeof(sExt)-1);
+	strncpy(Texture.sExt, sExt, sizeof(Texture.sExt));
+	Texture.sExt[sizeof(Texture.sExt)-1] = '\0';
+
+	glGenTextures( 1, &Texture.gluiDesiredBind );
+
+	if (Texture.pPixels)
+	{
+		Texture_BindAndUpload(&Texture);
+		TextureHandle_t thNewHandle = TextureList_GetNewHandle();
+		TheTextures[thNewHandle] = Texture;
+		TextureListByNames[strTextureName] = thNewHandle;
+		return thNewHandle;
+	}
+
+	// file not found - cache anyway
+	TextureHandle_t thNewHandle = TextureList_GetNewHandle();
+	TheTextures[thNewHandle] = Texture;
+	TextureListByNames[strTextureName] = thNewHandle;
+	return thNewHandle;
+}
 
 
 #if 0
