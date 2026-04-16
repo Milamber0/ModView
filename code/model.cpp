@@ -325,6 +325,22 @@ void AppVars_OnceOnlyInit(void)
 	AppVars.bFinished			=	false;
 	AppVars.bBilinear			=	true;	
 	AppVars.bInterpolate		=	true;
+	AppVars.bShaderAnimation	=	true;
+	AppVars.bShaderRendering	=	true;
+	AppVars.bDynamicGlow		=	true;
+	AppVars.bDynamicGlowSoft	=	true;
+	AppVars.bDynamicGlowFullbrightComp = true;
+	AppVars.entityRGBA[0]		=	255;
+	AppVars.entityRGBA[1]		=	255;
+	AppVars.entityRGBA[2]		=	255;
+	AppVars.entityRGBA[3]		=	255;
+	AppVars.bSaberBlade[0]		=	false;
+	AppVars.bSaberBlade[1]		=	false;
+	AppVars.saberColorIndex[0]	=	0;	// blue
+	AppVars.saberColorIndex[1]	=	1;	// green
+	AppVars.saberCustomColor[0][0] = 255; AppVars.saberCustomColor[0][1] = 255; AppVars.saberCustomColor[0][2] = 255;
+	AppVars.saberCustomColor[1][0] = 255; AppVars.saberCustomColor[1][1] = 255; AppVars.saberCustomColor[1][2] = 255;
+	AppVars.saberLength			=	40.0f;
 	AppVars.bUseAlpha			=	false;
 	AppVars.bUseAlphaMode2		=	false;
 	AppVars.bWireFrame			=	false;
@@ -548,6 +564,9 @@ void AppVars_ReadIdeal(void)
 //
 void Model_Delete(void)
 {
+	// Save scene state before deleting
+	SceneState_Save();
+
 	// delete common stuff...
 	//
 //	SAFEFREE(pvLoadedModel);
@@ -1845,12 +1864,12 @@ LPCSTR Model_GetSurfaceName( ModelHandle_t hModel, int iSurfaceIndex )
 //
 // returns -1 for error, so check it!!
 //
-int Model_GetBoltIndex( ModelHandle_t hModel, LPCSTR psBoltName, bool bBoltIsBone)
+int Model_GetBoltIndex( ModelHandle_t hModel, LPCSTR psBoltName, bool bBoltIsBone, bool bSilent)
 {
 	ModelContainer_t *pContainer = ModelContainer_FindFromModelHandle( hModel );
 	if (pContainer)
-	{	
-		return Model_GetBoltIndex( pContainer, psBoltName, bBoltIsBone );
+	{
+		return Model_GetBoltIndex( pContainer, psBoltName, bBoltIsBone, bSilent );
 	}
 
 	ErrorBox( "Model_GetBoltIndex(): " sERROR_CONTAINER_NOT_FOUND );
@@ -1863,7 +1882,7 @@ int Model_GetBoltIndex( ModelHandle_t hModel, LPCSTR psBoltName, bool bBoltIsBon
 //
 // returns -1 for error, so check it!!
 //
-int Model_GetBoltIndex( ModelContainer_t *pContainer, LPCSTR psBoltName, bool bBoltIsBone )	// semi-recursive now
+int Model_GetBoltIndex( ModelContainer_t *pContainer, LPCSTR psBoltName, bool bBoltIsBone, bool bSilent )	// semi-recursive now
 {
 	if (pContainer->pModelGetBoneBoltNameFunction && pContainer->pModelGetSurfaceBoltNameFunction)
 	{
@@ -1874,7 +1893,7 @@ int Model_GetBoltIndex( ModelContainer_t *pContainer, LPCSTR psBoltName, bool bB
 			if (!_stricmp(Model_GetBoltName( pContainer, i, bBoltIsBone), psBoltName ))
 				return i;
 		}
-	
+
 		if (bBoltIsBone)
 		{
 			// check aliases (uses recursion)
@@ -1898,7 +1917,8 @@ int Model_GetBoltIndex( ModelContainer_t *pContainer, LPCSTR psBoltName, bool bB
 			}
 		}
 
-		ErrorBox(va("Model_GetBoltIndex(): Unable to find bolt called \"%s\"!",psBoltName));
+		if (!bSilent)
+			ErrorBox(va("Model_GetBoltIndex(): Unable to find bolt called \"%s\"!",psBoltName));
 		return -1;
 	}
 
@@ -2145,7 +2165,8 @@ void App_OnceOnly(void)
 	AppVars_OnceOnlyInit();
 	OnceOnlyCrap();	// init some rubbish that cut/paste code wants for other formats
 
-	TextureList_OnceOnlyInit();	
+	TextureList_OnceOnlyInit();
+	Shader_Init();	// init waveform lookup tables for shader animations
 }
 
 ModelHandle_t Model_GetPrimaryHandle(void)
@@ -3591,10 +3612,22 @@ static void ModelList_Render_Actual(int iWindowWidth, int iWindowHeight)
 			bCatchError = true;
 		}
 
+		// Lightsaber blades (after models, before glow so blades get the bloom)
+		if (!bCatchError)
+		{
+			RE_DrawSaberBlades();
+		}
+
+		// Dynamic glow post-process (after all models rendered, before 2D overlays)
+		if (!bCatchError)
+		{
+			RE_RenderGlowPass();
+		}
+
 		// if all went well, draw view axis etc...
 		//
 		if (!bCatchError)
-		{ 
+		{
 			glDisable(GL_BLEND);
 
 			// ( functions inhibit-checked internally )

@@ -182,6 +182,9 @@ struct ModelContainer
 	SurfaceEdgeInfoPerLOD_t SurfaceEdgeInfoPerLOD;	// used only when crack-viewing
 
 	string			strCurrentSkinFile;		// used for both SOF and CHC skins
+	string			strCurrentPartSkin_Head;	// last applied head_* skin (empty if none)
+	string			strCurrentPartSkin_Torso;	// last applied torso_* skin
+	string			strCurrentPartSkin_Lower;	// last applied lower_* skin
 	string			strCurrentSkinEthnic;	// only for SOF2 skins
 	MaterialBinds_t	MaterialBinds;		// constructed whenever skin details are changed, used for fast-lookup
 	MappedString_t	MaterialShaders;	// " "	
@@ -245,6 +248,18 @@ typedef struct
 	bool	bAnimate;
 	bool	bForceWrapWhenAnimating;
 	bool	bInterpolate;
+	bool	bShaderAnimation;
+	bool	bShaderRendering;
+	bool	bDynamicGlow;
+	bool	bDynamicGlowSoft;
+	bool	bDynamicGlowFullbrightComp;
+	byte	entityRGBA[4];		// entity color for rgbGen entity shaders
+
+	// Lightsaber blade settings
+	bool	bSaberBlade[2];		// blade on/off for right[0] and left[1] hand
+	int		saberColorIndex[2];	// 0=blue,1=green,2=yellow,3=orange,4=red,5=purple,6=custom
+	byte	saberCustomColor[2][3]; // custom RGB when index==6
+	float	saberLength;		// blade length (game units)
 	bool	bUseAlpha;
 	bool	bUseAlphaMode2;
 	bool	bWireFrame;
@@ -306,6 +321,10 @@ void AppVars_ResetViewParams(void);
 void App_OnceOnly(void);
 
 ModelHandle_t	Model_GetPrimaryHandle(void);
+
+// Scene state persistence
+void SceneState_Save(void);
+void SceneState_Restore(LPCSTR psModelPath);
 bool	Model_Loaded(ModelHandle_t hModel = NULL);
 void	Model_Delete(void);
 void	Model_ValidateSkin( ModelHandle_t hModel, int iSkinNumber);
@@ -341,8 +360,8 @@ LPCSTR	Model_GetSurfaceName( ModelContainer_t *pContainer, int iSurfaceIndex );
 bool	Model_SurfaceIsTag( ModelContainer_t *pContainer, int iSurfaceIndex);
 bool	Model_SurfaceIsTag( ModelHandle_t hModel, int iSurfaceIndex);
 LPCSTR	Model_GetBoneName( ModelHandle_t hModel, int iBoneIndex );
-int		Model_GetBoltIndex( ModelHandle_t hModel, LPCSTR psBoltName, bool bBoltIsBone);
-int		Model_GetBoltIndex( ModelContainer_t *pContainer, LPCSTR psBoltName, bool bBoltIsBone );
+int		Model_GetBoltIndex( ModelHandle_t hModel, LPCSTR psBoltName, bool bBoltIsBone, bool bSilent = false);
+int		Model_GetBoltIndex( ModelContainer_t *pContainer, LPCSTR psBoltName, bool bBoltIsBone, bool bSilent = false);
 LPCSTR	Model_GetBoltName( ModelHandle_t hModel, int iBoltIndex, bool bBoltIsBone );
 LPCSTR	Model_GetBoltName( ModelContainer_t *pContainer, int iBoltIndex, bool bBoltIsBone );
 LPCSTR	Model_GetFullPrimaryFilename( void );
