@@ -13,6 +13,8 @@ void GetWeightColour(int iNumWeights, byte &r, byte &g, byte &b);
 void RB_CheckOverflow( int verts, int indexes );
 void RE_GenerateDrawSurfs( void );
 void RE_RenderDrawSurfs( void );
+void RE_RenderGlowPass( void );	// re-renders glow stages only, blurs, composites
+void RE_DrawSaberBlades( void );	// draw lightsaber blades on bolted sabers
 
 void R_ModView_BeginEntityAdd(void);
 void R_ModView_AddEntity(ModelHandle_t hModel,			int iFrame_Primary, int iOldFrame_Primary, 

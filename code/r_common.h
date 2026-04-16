@@ -60,21 +60,8 @@ typedef struct {
 	int			iSurfaceNum_RootOverride;
 
 	float		backlerp;			// 0.0 = current, 1.0 = old
-/*
-	// texturing
-	int			skinNum;			// inline skin index
-	qhandle_t	customSkin;			// NULL for default skin
-	qhandle_t	customShader;		// use one image for the entire thing
 
-	// misc
 	byte		shaderRGBA[4];		// colors used by rgbgen entity shaders
-	float		shaderTexCoord[2];	// texture coordinates used by tcMod entity modifiers
-	float		shaderTime;			// subtracted from refdef time to control effect start times
-
-	// extra sprite information
-	float		radius;
-	float		rotation;
-*/
 
 	// some stats stuff just for ModView...
 	//
@@ -163,6 +150,7 @@ typedef enum {
 typedef struct drawSurf_s {
 	unsigned			sort;			// bit combination for fast compares
 	surfaceType_t		*surface;		// any of surface*_t
+	GLuint				skinOverrideBind;	// non-zero if skin system overrides the shader's texture
 } drawSurf_t;
 
 
@@ -483,8 +471,8 @@ int    LongSwap (int l);
 void Com_Printf( const char *format, ... );
 long generateHashValue( const char *fname );
 model_t	*R_GetModelByHandle( qhandle_t index );
-void R_AddDrawSurf( surfaceType_t *surface, GLuint gluiTextureBind);
-void R_DecomposeSort( unsigned sort, int *entityNum, GLuint* gluiTextureBind);
+void R_AddDrawSurf( surfaceType_t *surface, int shaderIndex, GLuint skinOverrideBind = 0);
+void R_DecomposeSort( unsigned sort, int *entityNum, int *shaderIndex);
 int  R_ComputeLOD( trRefEntity_t *ent );
 //
 // other crap...

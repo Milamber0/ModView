@@ -342,34 +342,25 @@ the bits are allocated as follows:
 #define	QSORT_ENTITYNUM_SHIFT	12
 #define	QSORT_FOGNUM_SHIFT		3
 //
-void R_AddDrawSurf( surfaceType_t *surface, GLuint gluiTextureBind)
+void R_AddDrawSurf( surfaceType_t *surface, int shaderIndex, GLuint skinOverrideBind)
 {
-	// instead of checking for overflow, we just mask the index
-	// so it wraps around
-
 	int index = tr.refdef.numDrawSurfs & DRAWSURF_MASK;
 
-	tr.refdef.drawSurfs[index].sort = (gluiTextureBind/*shader->sortedIndex*/ << QSORT_SHADERNUM_SHIFT)
+	tr.refdef.drawSurfs[index].sort = (shaderIndex				<< QSORT_SHADERNUM_SHIFT)
 									| (tr.currentEntityNum		<< QSORT_ENTITYNUM_SHIFT)
-									| (0/* fogIndex*/			<< QSORT_FOGNUM_SHIFT)
-									|  0/*(int)dlightMap*/;
+									| (0						<< QSORT_FOGNUM_SHIFT)
+									|  0;
 
 	tr.refdef.drawSurfs[index].surface = surface;
+	tr.refdef.drawSurfs[index].skinOverrideBind = skinOverrideBind;
 	tr.refdef.numDrawSurfs++;
 }
 
 
-
-
-void R_DecomposeSort( unsigned sort, int *entityNum, GLuint* gluiTextureBind
-					 // MODVIEWREM //,shader_t **shader, int *fogNum, int *dlightMap 
-					 )
+void R_DecomposeSort( unsigned sort, int *entityNum, int *shaderIndex )
 {
-//	*fogNum = ( sort >> QSORT_FOGNUM_SHIFT ) & 31;
-//	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & (MAX_SHADERS-1) ];
-	*gluiTextureBind = ( sort >> QSORT_SHADERNUM_SHIFT );
+	*shaderIndex = ( sort >> QSORT_SHADERNUM_SHIFT ) & (MAX_SHADERS-1);
 	*entityNum = ( sort >> QSORT_ENTITYNUM_SHIFT ) & 1023;
-//	*dlightMap = sort & 3;
 }
 
 
