@@ -435,5 +435,199 @@ bool ScreenShot(LPCSTR psFilename,			// else NULL = take memory snapshot (for cl
 }
 
 
+// =============================================================================
+// PNG Writing (minimal encoder using zlib deflate)
+// =============================================================================
+
+#include "zlib/zlib.h"
+
+static void PNG_WriteBE32(FILE *f, unsigned int v) {
+	fputc((v>>24)&0xFF, f); fputc((v>>16)&0xFF, f); fputc((v>>8)&0xFF, f); fputc(v&0xFF, f);
+}
+
+static unsigned int PNG_CRC32(const unsigned char *data, int len) {
+	unsigned int crc = 0xFFFFFFFF;
+	static unsigned int table[256] = {0};
+	if (!table[1]) {
+		for (int i = 0; i < 256; i++) {
+			unsigned int c = i;
+			for (int j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >> 1)) : (c >> 1);
+			table[i] = c;
+		}
+	}
+	for (int i = 0; i < len; i++) crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
+	return crc ^ 0xFFFFFFFF;
+}
+
+static void PNG_WriteChunk(FILE *f, const char *type, const unsigned char *data, int len) {
+	PNG_WriteBE32(f, len);
+	fwrite(type, 1, 4, f);
+	if (data && len > 0) fwrite(data, 1, len, f);
+	// CRC covers type + data
+	unsigned char *buf = (unsigned char*)malloc(4 + len);
+	memcpy(buf, type, 4);
+	if (data && len > 0) memcpy(buf+4, data, len);
+	PNG_WriteBE32(f, PNG_CRC32(buf, 4 + len));
+	free(buf);
+}
+
+static bool PNG_Save(LPCSTR filename, int width, int height, const unsigned char *rgba) {
+	FILE *f = fopen(filename, "wb");
+	if (!f) return false;
+
+	// PNG signature
+	const unsigned char sig[] = {137,80,78,71,13,10,26,10};
+	fwrite(sig, 1, 8, f);
+
+	// IHDR
+	unsigned char ihdr[13];
+	ihdr[0]=(width>>24)&0xFF; ihdr[1]=(width>>16)&0xFF; ihdr[2]=(width>>8)&0xFF; ihdr[3]=width&0xFF;
+	ihdr[4]=(height>>24)&0xFF; ihdr[5]=(height>>16)&0xFF; ihdr[6]=(height>>8)&0xFF; ihdr[7]=height&0xFF;
+	ihdr[8] = 8;  // bit depth
+	ihdr[9] = 6;  // color type: RGBA
+	ihdr[10] = 0; // compression
+	ihdr[11] = 0; // filter
+	ihdr[12] = 0; // interlace
+	PNG_WriteChunk(f, "IHDR", ihdr, 13);
+
+	// Prepare raw scanlines (filter byte 0 + RGBA per pixel, bottom-to-top flipped for GL)
+	int rawLen = height * (1 + width * 4);
+	unsigned char *raw = (unsigned char*)malloc(rawLen);
+	for (int y = 0; y < height; y++) {
+		int srcY = height - 1 - y;  // flip vertically (GL reads bottom-up)
+		raw[y * (1 + width*4)] = 0; // filter: none
+		memcpy(&raw[y * (1 + width*4) + 1], &rgba[srcY * width * 4], width * 4);
+	}
+
+	// Compress with zlib deflate (compress2 not available in this build)
+	uLong compBufLen = rawLen + rawLen/100 + 12 + 64;
+	unsigned char *comp = (unsigned char*)malloc(compBufLen);
+	uLong compLen = 0;
+	{
+		z_stream strm = {0};
+		deflateInit(&strm, Z_DEFAULT_COMPRESSION);
+		strm.next_in = raw;
+		strm.avail_in = rawLen;
+		strm.next_out = comp;
+		strm.avail_out = compBufLen;
+		deflate(&strm, Z_FINISH);
+		compLen = strm.total_out;
+		deflateEnd(&strm);
+	}
+	if (compLen == 0) {
+		free(raw); free(comp); fclose(f);
+		return false;
+	}
+
+	PNG_WriteChunk(f, "IDAT", comp, (int)compLen);
+	free(raw);
+	free(comp);
+
+	// IEND
+	PNG_WriteChunk(f, "IEND", NULL, 0);
+
+	fclose(f);
+	return true;
+}
+
+
+// =============================================================================
+// Transparent PNG Screenshot
+// Renders twice (black bg + white bg) to compute alpha, saves as RGBA PNG
+// =============================================================================
+
+extern void ModelList_Render(int iWindowWidth, int iWindowHeight);
+extern bool gbTextInhibit;
+
+bool ScreenShotPNG_Transparent(LPCSTR psFilename, int iWidth, int iHeight)
+{
+	int pixelCount = iWidth * iHeight;
+	int rgbSize = pixelCount * 3;
+	unsigned char *blackBG = (unsigned char*)malloc(rgbSize);
+	unsigned char *whiteBG = (unsigned char*)malloc(rgbSize);
+	unsigned char *rgba = (unsigned char*)malloc(pixelCount * 4);
+	if (!blackBG || !whiteBG || !rgba) {
+		free(blackBG); free(whiteBG); free(rgba);
+		return false;
+	}
+
+	int iOldPack;
+	glGetIntegerv(GL_PACK_ALIGNMENT, &iOldPack);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+	// Save original background color
+	byte origR = AppVars._R, origG = AppVars._G, origB = AppVars._B;
+
+	// Render 1: black background
+	AppVars._R = 0; AppVars._G = 0; AppVars._B = 0;
+	gbTextInhibit = true;
+	ModelList_Render(iWidth, iHeight);
+	glReadPixels(0, 0, iWidth, iHeight, GL_RGB, GL_UNSIGNED_BYTE, blackBG);
+
+	// Render 2: white background
+	AppVars._R = 255; AppVars._G = 255; AppVars._B = 255;
+	ModelList_Render(iWidth, iHeight);
+	glReadPixels(0, 0, iWidth, iHeight, GL_RGB, GL_UNSIGNED_BYTE, whiteBG);
+
+	gbTextInhibit = false;
+
+	// Restore original background
+	AppVars._R = origR; AppVars._G = origG; AppVars._B = origB;
+
+	// Compute RGBA from the two renders:
+	// black: pixel_b = color * alpha
+	// white: pixel_w = color * alpha + 255 * (1 - alpha)
+	// Therefore: 255 * (1 - alpha) = pixel_w - pixel_b
+	//            alpha = 1 - (pixel_w - pixel_b) / 255
+	//            color = pixel_b / alpha  (if alpha > 0)
+	for (int i = 0; i < pixelCount; i++) {
+		int bR = blackBG[i*3+0], bG = blackBG[i*3+1], bB = blackBG[i*3+2];
+		int wR = whiteBG[i*3+0], wG = whiteBG[i*3+1], wB = whiteBG[i*3+2];
+
+		// Alpha from two-render difference (standard alpha compositing)
+		int diffR = wR - bR; if (diffR < 0) diffR = 0;
+		int diffG = wG - bG; if (diffG < 0) diffG = 0;
+		int diffB = wB - bB; if (diffB < 0) diffB = 0;
+		int maxDiff = diffR; if (diffG > maxDiff) maxDiff = diffG; if (diffB > maxDiff) maxDiff = diffB;
+		int alphaFromDiff = 255 - maxDiff;
+
+		// For additive effects (glow, lightsabers), the two-render technique gives
+		// low alpha because additive blending doesn't follow standard compositing.
+		// Use the black render brightness as a minimum alpha floor.
+		int maxBlack = bR; if (bG > maxBlack) maxBlack = bG; if (bB > maxBlack) maxBlack = bB;
+
+		int alpha = alphaFromDiff;
+		if (maxBlack > alpha) alpha = maxBlack;
+		if (alpha < 0) alpha = 0;
+		if (alpha > 255) alpha = 255;
+
+		// Recover color: un-premultiply from the black render
+		int finalR, finalG, finalB;
+		if (alpha > 0) {
+			finalR = bR * 255 / alpha; if (finalR > 255) finalR = 255;
+			finalG = bG * 255 / alpha; if (finalG > 255) finalG = 255;
+			finalB = bB * 255 / alpha; if (finalB > 255) finalB = 255;
+		} else {
+			finalR = finalG = finalB = 0;
+		}
+
+		rgba[i*4+0] = (unsigned char)finalR;
+		rgba[i*4+1] = (unsigned char)finalG;
+		rgba[i*4+2] = (unsigned char)finalB;
+		rgba[i*4+3] = (unsigned char)alpha;
+	}
+
+	glPixelStorei(GL_PACK_ALIGNMENT, iOldPack);
+
+	bool bResult = PNG_Save(psFilename, iWidth, iHeight, rgba);
+
+	free(blackBG);
+	free(whiteBG);
+	free(rgba);
+
+	return bResult;
+}
+
+
 //////////////// eof ////////////////
 
