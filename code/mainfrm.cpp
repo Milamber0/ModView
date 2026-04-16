@@ -79,6 +79,20 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_ANIMATION_SLOWER, OnAnimationSlower)
 	ON_COMMAND(ID_ANIMATION_LERPING, OnAnimationLerping)
 	ON_UPDATE_COMMAND_UI(ID_ANIMATION_LERPING, OnUpdateAnimationLerping)
+	ON_COMMAND(ID_ANIMATION_SHADERS, OnAnimationShaders)
+	ON_UPDATE_COMMAND_UI(ID_ANIMATION_SHADERS, OnUpdateAnimationShaders)
+	ON_COMMAND(ID_VIEW_SHADERS, OnViewShaders)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SHADERS, OnUpdateViewShaders)
+	ON_COMMAND(ID_VIEW_ENTITYCOLOR, OnViewEntityColor)
+	ON_COMMAND(ID_SEQUENCES_SEARCH, OnSequencesSearch)
+	ON_COMMAND(ID_VIEW_DYNAMICGLOW, OnViewDynamicGlow)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_DYNAMICGLOW, OnUpdateViewDynamicGlow)
+	ON_COMMAND(ID_VIEW_DYNAMICGLOWSOFT, OnViewDynamicGlowSoft)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_DYNAMICGLOWSOFT, OnUpdateViewDynamicGlowSoft)
+	ON_COMMAND(ID_VIEW_GLOWFULLBRIGHTCOMP, OnViewGlowFullbrightComp)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_GLOWFULLBRIGHTCOMP, OnUpdateViewGlowFullbrightComp)
+	ON_COMMAND(ID_VIEW_WEAPONS, OnViewWeapons)
+	ON_COMMAND_RANGE(ID_WEAPON_FIRST, ID_WEAPON_LAST, OnWeaponMenuCommand)
 	ON_UPDATE_COMMAND_UI(ID_FILE_SAVE, OnUpdateFileSave)
 	ON_COMMAND(ID_MODEL_SAVE_AS, OnModelSaveAs)
 	ON_COMMAND(ID_FILE_WRITEIDEAL, OnFileWriteideal)
@@ -209,6 +223,81 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	{
 		TRACE0("Failed to create toolbar\n");
 		return -1;      // fail to create
+	}
+
+	{
+		// Append shader buttons to the main toolbar.
+		// Main toolbar images are 16x15. Shader bitmap is 15x15.
+		// Create a padded 32x15 (2x 16x15) bitmap from the 30x15 (2x 15x15) source.
+		CToolBarCtrl &tbc = m_wndToolBar.GetToolBarCtrl();
+
+		CBitmap srcBmp;
+		srcBmp.LoadBitmap(IDR_SHADER_TOOLBAR);
+		BITMAP srcInfo;
+		srcBmp.GetBitmap(&srcInfo);
+
+		// Create a padded bitmap (16 pixels wide per icon instead of 15)
+		CDC *pDC = GetDC();
+		CDC srcDC, dstDC;
+		srcDC.CreateCompatibleDC(pDC);
+		dstDC.CreateCompatibleDC(pDC);
+
+		int nIcons = srcInfo.bmWidth / 15;
+		CBitmap paddedBmp;
+		paddedBmp.CreateCompatibleBitmap(pDC, nIcons * 16, 15);
+
+		CBitmap *pOldSrc = srcDC.SelectObject(&srcBmp);
+		CBitmap *pOldDst = dstDC.SelectObject(&paddedBmp);
+
+		// Fill with toolbar background color (light gray)
+		dstDC.FillSolidRect(0, 0, nIcons * 16, 15, RGB(192, 192, 192));
+
+		// Copy each 15x15 icon into a 16x15 slot (centered)
+		for (int i = 0; i < nIcons; i++) {
+			dstDC.BitBlt(i * 16, 0, 15, 15, &srcDC, i * 15, 0, SRCCOPY);
+		}
+
+		dstDC.SelectObject(pOldDst);
+		srcDC.SelectObject(pOldSrc);
+		ReleaseDC(pDC);
+
+		// Add the padded bitmap to the toolbar
+		TBADDBITMAP tbab;
+		tbab.hInst = NULL;
+		tbab.nID = (UINT_PTR)(HBITMAP)paddedBmp;
+		int iFirstNewImage = (int)::SendMessage(tbc.m_hWnd, TB_ADDBITMAP, nIcons, (LPARAM)&tbab);
+		paddedBmp.Detach(); // toolbar takes ownership
+
+		// Add a separator and the custom buttons
+		// Bitmap order: [0]=search, [1]=shader on/off, [2]=shader anim, [3]=color picker, [4]=glow, [5]=weapons
+		TBBUTTON buttons[7];
+		memset(buttons, 0, sizeof(buttons));
+		buttons[0].fsStyle = TBSTYLE_SEP;
+		buttons[1].iBitmap = iFirstNewImage + 0;
+		buttons[1].idCommand = ID_SEQUENCES_SEARCH;
+		buttons[1].fsState = TBSTATE_ENABLED;
+		buttons[1].fsStyle = TBSTYLE_BUTTON;
+		buttons[2].iBitmap = iFirstNewImage + 1;
+		buttons[2].idCommand = ID_VIEW_SHADERS;
+		buttons[2].fsState = TBSTATE_ENABLED;
+		buttons[2].fsStyle = TBSTYLE_CHECK;
+		buttons[3].iBitmap = iFirstNewImage + 2;
+		buttons[3].idCommand = ID_ANIMATION_SHADERS;
+		buttons[3].fsState = TBSTATE_ENABLED;
+		buttons[3].fsStyle = TBSTYLE_CHECK;
+		buttons[4].iBitmap = iFirstNewImage + 3;
+		buttons[4].idCommand = ID_VIEW_ENTITYCOLOR;
+		buttons[4].fsState = TBSTATE_ENABLED;
+		buttons[4].fsStyle = TBSTYLE_BUTTON;
+		buttons[5].iBitmap = iFirstNewImage + 4;
+		buttons[5].idCommand = ID_VIEW_DYNAMICGLOW;
+		buttons[5].fsState = TBSTATE_ENABLED;
+		buttons[5].fsStyle = TBSTYLE_CHECK;
+		buttons[6].iBitmap = iFirstNewImage + 5;
+		buttons[6].idCommand = ID_VIEW_WEAPONS;
+		buttons[6].fsState = TBSTATE_ENABLED;
+		buttons[6].fsStyle = TBSTYLE_BUTTON;
+		tbc.AddButtons(7, buttons);
 	}
 
 	if (!m_wndStatusBar.Create(this) ||
@@ -346,9 +435,636 @@ void CMainFrame::OnAnimationLerping()
 	OnViewInterpolate();
 }
 
-void CMainFrame::OnUpdateAnimationLerping(CCmdUI* pCmdUI) 
+void CMainFrame::OnUpdateAnimationLerping(CCmdUI* pCmdUI)
 {
-	OnUpdateViewInterpolate(pCmdUI);	
+	OnUpdateViewInterpolate(pCmdUI);
+}
+
+void CMainFrame::OnAnimationShaders()
+{
+	AppVars.bShaderAnimation = !AppVars.bShaderAnimation;
+	m_splitter.Invalidate(false);
+}
+
+void CMainFrame::OnUpdateAnimationShaders(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(AppVars.bShaderAnimation);
+}
+
+void CMainFrame::OnViewShaders()
+{
+	AppVars.bShaderRendering = !AppVars.bShaderRendering;
+	m_splitter.Invalidate(false);
+}
+
+void CMainFrame::OnUpdateViewShaders(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(AppVars.bShaderRendering);
+}
+
+
+// Parse playerchoice.txt from the model's folder and return preset colors
+struct PlayerChoiceColor {
+	CString name;
+	COLORREF color;
+};
+
+static bool ParsePlayerChoiceColors(CArray<PlayerChoiceColor, PlayerChoiceColor&> &colors)
+{
+	LPCSTR psModelPath = Model_GetFullPrimaryFilename();
+	if (!psModelPath || !psModelPath[0]) return false;
+
+	// Get the model's directory
+	CString strDir(psModelPath);
+	int lastSlash = strDir.ReverseFind('\\');
+	if (lastSlash < 0) lastSlash = strDir.ReverseFind('/');
+	if (lastSlash < 0) return false;
+	strDir = strDir.Left(lastSlash + 1);
+
+	CString strFile = strDir + "playerchoice.txt";
+	FILE *f = fopen(strFile, "rt");
+	if (!f) return false;
+
+	char line[1024];
+	while (fgets(line, sizeof(line), f)) {
+		// Skip comments and blank lines
+		char *p = line;
+		while (*p == ' ' || *p == '\t') p++;
+		if (*p == '/' && *(p+1) == '/') continue;
+		if (*p == '\n' || *p == '\r' || *p == 0) continue;
+
+		// If line starts with '{', we're inside a block
+		if (*p == '{') continue;
+		if (*p == '}') continue;
+		if (strstr(p, "setcvar")) continue;
+
+		// This should be a choice name line (before a '{' block)
+		CString choiceName(p);
+		choiceName.TrimRight();
+		choiceName.TrimLeft();
+		if (choiceName.IsEmpty()) continue;
+
+		// Extract just the last part of the path for display
+		CString displayName = choiceName;
+		int slash = displayName.ReverseFind('/');
+		if (slash >= 0) displayName = displayName.Mid(slash + 1);
+
+		// Read the block to get RGB values
+		int r = 255, g = 255, b = 255;
+		while (fgets(line, sizeof(line), f)) {
+			p = line;
+			while (*p == ' ' || *p == '\t') p++;
+			if (*p == '}') break;
+			if (strstr(p, "ui_char_color_red")) {
+				char *val = strstr(p, "red");
+				if (val) { val += 3; r = atoi(val); }
+			} else if (strstr(p, "ui_char_color_green")) {
+				char *val = strstr(p, "green");
+				if (val) { val += 5; g = atoi(val); }
+			} else if (strstr(p, "ui_char_color_blue")) {
+				char *val = strstr(p, "blue");
+				if (val) { val += 4; b = atoi(val); }
+			}
+		}
+
+		PlayerChoiceColor pc;
+		pc.name = displayName;
+		pc.color = RGB(r, g, b);
+		colors.Add(pc);
+	}
+
+	fclose(f);
+	return colors.GetSize() > 0;
+}
+
+
+void CMainFrame::OnViewEntityColor()
+{
+	// Check for playerchoice.txt presets
+	CArray<PlayerChoiceColor, PlayerChoiceColor&> presetColors;
+	bool hasPresets = ParsePlayerChoiceColors(presetColors);
+
+	// Build custom colors array for the color dialog (up to 16)
+	COLORREF customColors[16];
+	for (int i = 0; i < 16; i++) customColors[i] = RGB(255, 255, 255);
+	for (int i = 0; i < presetColors.GetSize() && i < 16; i++) {
+		customColors[i] = presetColors[i].color;
+	}
+
+	COLORREF initialColor = RGB(AppVars.entityRGBA[0], AppVars.entityRGBA[1], AppVars.entityRGBA[2]);
+
+	CColorDialog dlg(initialColor, CC_FULLOPEN | CC_RGBINIT, this);
+	dlg.m_cc.lpCustColors = customColors;
+
+	if (dlg.DoModal() == IDOK) {
+		COLORREF c = dlg.GetColor();
+		AppVars.entityRGBA[0] = GetRValue(c);
+		AppVars.entityRGBA[1] = GetGValue(c);
+		AppVars.entityRGBA[2] = GetBValue(c);
+		AppVars.entityRGBA[3] = 255;
+		m_splitter.Invalidate(false);
+	}
+}
+
+
+void CMainFrame::OnViewDynamicGlow()
+{
+	AppVars.bDynamicGlow = !AppVars.bDynamicGlow;
+	m_splitter.Invalidate(false);
+}
+
+void CMainFrame::OnUpdateViewDynamicGlow(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(AppVars.bDynamicGlow);
+}
+
+void CMainFrame::OnViewDynamicGlowSoft()
+{
+	AppVars.bDynamicGlowSoft = !AppVars.bDynamicGlowSoft;
+	m_splitter.Invalidate(false);
+}
+
+void CMainFrame::OnUpdateViewDynamicGlowSoft(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(AppVars.bDynamicGlowSoft);
+}
+
+void CMainFrame::OnViewGlowFullbrightComp()
+{
+	AppVars.bDynamicGlowFullbrightComp = !AppVars.bDynamicGlowFullbrightComp;
+	m_splitter.Invalidate(false);
+}
+
+void CMainFrame::OnUpdateViewGlowFullbrightComp(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(AppVars.bDynamicGlowFullbrightComp);
+}
+
+
+// ============================================================================
+// Weapon Bolt System
+// ============================================================================
+
+// Bolt location IDs encoded in the menu command: ID_WEAPON_FIRST + weaponIndex * 6 + locationIndex
+// Locations: 0=Right Hand, 1=Left Hand, 2=Right Hip, 3=Left Hip, 4=Back, 5=Remove
+#define WEAPON_LOC_RHAND	0
+#define WEAPON_LOC_LHAND	1
+#define WEAPON_LOC_RHIP		2
+#define WEAPON_LOC_LHIP		3
+#define WEAPON_LOC_BACK		4
+#define WEAPON_LOC_REMOVE	5
+#define WEAPON_LOCS_PER_WEAPON 6
+
+struct WeaponEntry {
+	CString displayName;
+	CString fullPath;		// full disk path to .glm
+	CString localPath;		// game-relative path
+};
+
+static CArray<WeaponEntry, WeaponEntry&> g_weaponList;
+
+static void ScanWeapons()
+{
+	g_weaponList.RemoveAll();
+
+	if (!gamedir[0]) return;
+
+	CString strWeaponsDir;
+	strWeaponsDir.Format("%smodels/weapons2/", gamedir);
+
+	// Scan subdirectories
+	char **ppDirs = NULL;
+	int nDirs = 0;
+	ppDirs = Sys_ListFiles(strWeaponsDir, "/", NULL, &nDirs, qtrue);
+
+	if (!ppDirs || !nDirs) return;
+
+	for (int d = 0; d < nDirs; d++) {
+		if (ppDirs[d][0] == '.') continue;
+
+		CString subDir;
+		subDir.Format("%s%s/", (LPCSTR)strWeaponsDir, ppDirs[d]);
+
+		// Look for *_w.glm files in this subdir
+		char **ppFiles = NULL;
+		int nFiles = 0;
+		ppFiles = Sys_ListFiles(subDir, ".glm", NULL, &nFiles, qfalse);
+
+		if (ppFiles && nFiles > 0) {
+			for (int f = 0; f < nFiles; f++) {
+				CString fileName(ppFiles[f]);
+				fileName.MakeLower();
+
+				WeaponEntry we;
+				we.displayName = ppDirs[d];
+				we.fullPath.Format("%s%s", (LPCSTR)subDir, ppFiles[f]);
+				we.localPath.Format("models/weapons2/%s/%s", ppDirs[d], ppFiles[f]);
+				g_weaponList.Add(we);
+			}
+			Sys_FreeFileList(ppFiles);
+		}
+	}
+
+	Sys_FreeFileList(ppDirs);
+}
+
+// Each bolt location has a list of names to try (surface first, then bone fallbacks)
+struct BoltLocationDef {
+	LPCSTR names[4];	// NULL-terminated list of names to try
+	bool   isBone[4];	// whether each name is a bone (true) or surface (false)
+};
+
+static BoltLocationDef g_boltLocations[] = {
+	// RHAND: tag surface "*r_hand"
+	{ {"*r_hand", "r_hand", NULL, NULL}, {false, false, false, false} },
+	// LHAND: tag surface "*l_hand"
+	{ {"*l_hand", "l_hand", NULL, NULL}, {false, false, false, false} },
+	// RHIP: tag surface "*hip_r", then "*hip_fr"
+	{ {"*hip_r", "*hip_fr", NULL, NULL}, {false, false, false, false} },
+	// LHIP: tag surface "*hip_l", then "*hip_fl"
+	{ {"*hip_l", "*hip_fl", NULL, NULL}, {false, false, false, false} },
+	// BACK: tag surface "*back"
+	{ {"*back", "thoracic", NULL, NULL}, {false, true, false, false} },
+};
+
+// ============================================================================
+// Weapon Dialog
+// ============================================================================
+
+class CWeaponDlg : public CDialog
+{
+public:
+	CWeaponDlg(CWnd* pParent) : CDialog(IDD_WEAPON_DIALOG, pParent) {}
+
+protected:
+	CListBox m_weaponList;
+
+	void PopulateColorCombo(int nID, int sel) {
+		CComboBox *pCombo = (CComboBox*)GetDlgItem(nID);
+		if (!pCombo) return;
+		pCombo->AddString("Blue");
+		pCombo->AddString("Green");
+		pCombo->AddString("Yellow");
+		pCombo->AddString("Orange");
+		pCombo->AddString("Red");
+		pCombo->AddString("Purple");
+		pCombo->AddString("Custom...");
+		pCombo->SetCurSel(sel);
+	}
+
+	virtual BOOL OnInitDialog() {
+		CDialog::OnInitDialog();
+		m_weaponList.SubclassDlgItem(IDC_WEAPON_LIST, this);
+
+		ScanWeapons();
+		for (int i = 0; i < g_weaponList.GetSize(); i++) {
+			CString display;
+			display.Format("%s / %s", (LPCSTR)g_weaponList[i].displayName,
+				(LPCSTR)Filename_WithoutPath(g_weaponList[i].fullPath));
+			int idx = m_weaponList.AddString(display);
+			m_weaponList.SetItemData(idx, i);
+		}
+		if (m_weaponList.GetCount() > 0) m_weaponList.SetCurSel(0);
+
+		CheckDlgButton(IDC_SABER_RBLADE, AppVars.bSaberBlade[0] ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(IDC_SABER_LBLADE, AppVars.bSaberBlade[1] ? BST_CHECKED : BST_UNCHECKED);
+
+		PopulateColorCombo(IDC_SABER_RCOMBO, AppVars.saberColorIndex[0]);
+		PopulateColorCombo(IDC_SABER_LCOMBO, AppVars.saberColorIndex[1]);
+		return TRUE;
+	}
+
+	void BoltSelected(int location) {
+		int sel = m_weaponList.GetCurSel();
+		if (sel == LB_ERR) return;
+		int weapIdx = (int)m_weaponList.GetItemData(sel);
+		if (weapIdx < 0 || weapIdx >= g_weaponList.GetSize()) return;
+
+		ModelHandle_t hModel = Model_GetPrimaryHandle();
+		if (!hModel) return;
+
+		BoltLocationDef &loc = g_boltLocations[location];
+		for (int n = 0; loc.names[n] != NULL; n++) {
+			if (Model_LoadBoltOn(g_weaponList[weapIdx].fullPath, hModel, loc.names[n], loc.isBone[n], true))
+				break;
+		}
+		GetParent()->Invalidate(false);
+	}
+
+	virtual BOOL OnCommand(WPARAM wParam, LPARAM lParam) {
+		switch (LOWORD(wParam)) {
+		case IDC_WEAPON_RHAND: BoltSelected(WEAPON_LOC_RHAND); return TRUE;
+		case IDC_WEAPON_LHAND: BoltSelected(WEAPON_LOC_LHAND); return TRUE;
+		case IDC_WEAPON_RHIP:  BoltSelected(WEAPON_LOC_RHIP);  return TRUE;
+		case IDC_WEAPON_LHIP:  BoltSelected(WEAPON_LOC_LHIP);  return TRUE;
+		case IDC_WEAPON_BACK:  BoltSelected(WEAPON_LOC_BACK);   return TRUE;
+
+		case IDC_WEAPON_REMOVE_ALL: {
+			ModelHandle_t hModel = Model_GetPrimaryHandle();
+			if (hModel) {
+				// Remove all surface-bolted models (weapons are bolted to tag surfaces)
+				ModelContainer_t *pC = ModelContainer_FindFromModelHandle(hModel);
+				if (pC) {
+					for (int b = pC->iSurfaceBolt_MaxBoltPoints - 1; b >= 0; b--) {
+						while (!pC->tSurfaceBolt_BoltPoints[b].vBoltedContainers.empty()) {
+							Model_DeleteBoltOn(hModel, b, false, 0);
+						}
+					}
+				}
+				GetParent()->Invalidate(false);
+			}
+			return TRUE;
+		}
+
+		case IDC_SABER_RBLADE:
+			AppVars.bSaberBlade[0] = (IsDlgButtonChecked(IDC_SABER_RBLADE) == BST_CHECKED);
+			GetParent()->Invalidate(false);
+			return TRUE;
+		case IDC_SABER_LBLADE:
+			AppVars.bSaberBlade[1] = (IsDlgButtonChecked(IDC_SABER_LBLADE) == BST_CHECKED);
+			GetParent()->Invalidate(false);
+			return TRUE;
+
+		case IDC_SABER_RCOLOR: {
+			AppVars.saberColorIndex[0] = 6;  // switch to custom
+			((CComboBox*)GetDlgItem(IDC_SABER_RCOMBO))->SetCurSel(6);
+			CColorDialog dlg(RGB(AppVars.saberCustomColor[0][0], AppVars.saberCustomColor[0][1], AppVars.saberCustomColor[0][2]), CC_FULLOPEN | CC_RGBINIT, this);
+			if (dlg.DoModal() == IDOK) {
+				COLORREF c = dlg.GetColor();
+				AppVars.saberCustomColor[0][0] = GetRValue(c); AppVars.saberCustomColor[0][1] = GetGValue(c); AppVars.saberCustomColor[0][2] = GetBValue(c);
+			}
+			GetParent()->Invalidate(false);
+			return TRUE;
+		}
+		case IDC_SABER_LCOLOR: {
+			AppVars.saberColorIndex[1] = 6;
+			((CComboBox*)GetDlgItem(IDC_SABER_LCOMBO))->SetCurSel(6);
+			CColorDialog dlg(RGB(AppVars.saberCustomColor[1][0], AppVars.saberCustomColor[1][1], AppVars.saberCustomColor[1][2]), CC_FULLOPEN | CC_RGBINIT, this);
+			if (dlg.DoModal() == IDOK) {
+				COLORREF c = dlg.GetColor();
+				AppVars.saberCustomColor[1][0] = GetRValue(c); AppVars.saberCustomColor[1][1] = GetGValue(c); AppVars.saberCustomColor[1][2] = GetBValue(c);
+			}
+			GetParent()->Invalidate(false);
+			return TRUE;
+		}
+
+		case IDC_SABER_RCOMBO:
+			if (HIWORD(wParam) == CBN_SELCHANGE) {
+				AppVars.saberColorIndex[0] = ((CComboBox*)GetDlgItem(IDC_SABER_RCOMBO))->GetCurSel();
+				GetParent()->Invalidate(false);
+			}
+			return TRUE;
+		case IDC_SABER_LCOMBO:
+			if (HIWORD(wParam) == CBN_SELCHANGE) {
+				AppVars.saberColorIndex[1] = ((CComboBox*)GetDlgItem(IDC_SABER_LCOMBO))->GetCurSel();
+				GetParent()->Invalidate(false);
+			}
+			return TRUE;
+		}
+		return CDialog::OnCommand(wParam, lParam);
+	}
+
+	virtual void OnCancel() { DestroyWindow(); }
+	virtual void PostNcDestroy();
+
+	DECLARE_MESSAGE_MAP()
+};
+
+BEGIN_MESSAGE_MAP(CWeaponDlg, CDialog)
+END_MESSAGE_MAP()
+
+static CWeaponDlg *g_pWeaponDlg = NULL;
+
+void CWeaponDlg::PostNcDestroy() {
+	g_pWeaponDlg = NULL;
+	CDialog::PostNcDestroy();
+	delete this;
+}
+
+void CMainFrame::OnViewWeapons()
+{
+	if (!Model_Loaded()) return;
+
+	if (g_pWeaponDlg && IsWindow(g_pWeaponDlg->m_hWnd)) {
+		g_pWeaponDlg->SetForegroundWindow();
+		return;
+	}
+
+	g_pWeaponDlg = new CWeaponDlg(this);
+	g_pWeaponDlg->Create(IDD_WEAPON_DIALOG, this);
+	g_pWeaponDlg->ShowWindow(SW_SHOW);
+}
+
+void CMainFrame::OnWeaponMenuCommand(UINT nID)
+{
+	// No longer used - weapon dialog handles everything
+}
+
+
+// ============================================================================
+// Animation Search Dialog - modeless dialog with live filtering
+// ============================================================================
+
+class CAnimSearchDlg : public CDialog
+{
+public:
+	CAnimSearchDlg(CWnd* pParent) : CDialog(IDD_ANIM_SEARCH, pParent) {}
+
+protected:
+	CEdit		m_edit;
+	CListBox	m_list;
+	CStringArray m_allAnims;	// full list of animation names
+	CArray<int, int> m_allIndices;	// corresponding sequence indices
+
+	virtual BOOL OnInitDialog() {
+		CDialog::OnInitDialog();
+		m_edit.SubclassDlgItem(IDC_ANIM_SEARCH_EDIT, this);
+		m_list.SubclassDlgItem(IDC_ANIM_SEARCH_LIST, this);
+
+		PopulateFullList();
+		FilterList("");
+		m_edit.SetFocus();
+		return FALSE;
+	}
+
+	void PopulateFullList() {
+		m_allAnims.RemoveAll();
+		m_allIndices.RemoveAll();
+
+		ModelHandle_t hModel = Model_GetPrimaryHandle();
+		if (!hModel) return;
+
+		int n = Model_GetNumSequences(hModel);
+		for (int i = 0; i < n; i++) {
+			LPCSTR psName = Model_Sequence_GetName(hModel, i, true);
+			if (psName && psName[0]) {
+				m_allAnims.Add(psName);
+				m_allIndices.Add(i);
+			}
+		}
+	}
+
+	void FilterList(LPCSTR psFilter) {
+		m_list.ResetContent();
+		CString strFilter(psFilter);
+		strFilter.MakeLower();
+		strFilter.TrimLeft(); strFilter.TrimRight();
+
+		for (int i = 0; i < m_allAnims.GetSize(); i++) {
+			CString strName(m_allAnims[i]);
+			CString strLower(strName);
+			strLower.MakeLower();
+
+			bool bMatch = true;
+			if (!strFilter.IsEmpty()) {
+				bool hasWildcard = (strFilter.Find('*') >= 0);
+
+				if (!hasWildcard) {
+					// No wildcards: simple substring match (implicit *filter*)
+					bMatch = (strLower.Find(strFilter) >= 0);
+				} else {
+					// Wildcards present: split by * and match parts in order
+					bool leadingWild = (strFilter.GetAt(0) == '*');
+					bool trailingWild = (strFilter.GetAt(strFilter.GetLength()-1) == '*');
+
+					CStringArray parts;
+					int start = 0;
+					for (int c = 0; c <= strFilter.GetLength(); c++) {
+						if (c == strFilter.GetLength() || strFilter.GetAt(c) == '*') {
+							CString part = strFilter.Mid(start, c - start);
+							if (!part.IsEmpty()) parts.Add(part);
+							start = c + 1;
+						}
+					}
+
+					if (parts.GetSize() == 0) {
+						bMatch = true;
+					} else {
+						bMatch = true;
+						int searchFrom = 0;
+						for (int p = 0; p < parts.GetSize(); p++) {
+							int found = strLower.Find(parts[p], searchFrom);
+							if (found < 0) { bMatch = false; break; }
+							if (p == 0 && !leadingWild && found != 0) { bMatch = false; break; }
+							searchFrom = found + parts[p].GetLength();
+						}
+						if (bMatch && !trailingWild && parts.GetSize() > 0) {
+							CString lastPart = parts[parts.GetSize()-1];
+							if (strLower.GetLength() < lastPart.GetLength() ||
+								strLower.Mid(strLower.GetLength() - lastPart.GetLength()) != lastPart)
+								bMatch = false;
+						}
+					}
+				}
+			}
+
+			if (bMatch) {
+				int idx = m_list.AddString(strName);
+				m_list.SetItemData(idx, m_allIndices[i]);
+			}
+		}
+	}
+
+	virtual BOOL PreTranslateMessage(MSG* pMsg) {
+		if (pMsg->message == WM_KEYDOWN && pMsg->hwnd == m_edit.m_hWnd) {
+			if (pMsg->wParam == VK_DOWN) {
+				int sel = m_list.GetCurSel();
+				int count = m_list.GetCount();
+				if (sel < count - 1) m_list.SetCurSel(sel + 1);
+				else if (sel == LB_ERR && count > 0) m_list.SetCurSel(0);
+				return TRUE;
+			}
+			if (pMsg->wParam == VK_UP) {
+				int sel = m_list.GetCurSel();
+				if (sel > 0) m_list.SetCurSel(sel - 1);
+				return TRUE;
+			}
+		}
+		return CDialog::PreTranslateMessage(pMsg);
+	}
+
+	virtual BOOL OnCommand(WPARAM wParam, LPARAM lParam) {
+		if (LOWORD(wParam) == IDC_ANIM_SEARCH_EDIT && HIWORD(wParam) == EN_CHANGE) {
+			CString str;
+			m_edit.GetWindowText(str);
+			FilterList(str);
+			return TRUE;
+		}
+		if (LOWORD(wParam) == IDC_ANIM_SEARCH_LIST && HIWORD(wParam) == LBN_DBLCLK) {
+			int sel = m_list.GetCurSel();
+			if (sel != LB_ERR) {
+				int seqIndex = (int)m_list.GetItemData(sel);
+				ModelHandle_t hModel = Model_GetPrimaryHandle();
+				if (hModel) {
+					Model_Sequence_Lock(hModel, seqIndex, true);
+					extern void ModelList_Rewind(void);
+					ModelList_Rewind();
+					GetParent()->Invalidate(false);
+				}
+			}
+			return TRUE;
+		}
+		return CDialog::OnCommand(wParam, lParam);
+	}
+
+	virtual void OnOK() {
+		// Enter key: select current item instead of closing
+		int sel = m_list.GetCurSel();
+		if (sel != LB_ERR) {
+			int seqIndex = (int)m_list.GetItemData(sel);
+			ModelHandle_t hModel = Model_GetPrimaryHandle();
+			if (hModel) {
+				Model_Sequence_Lock(hModel, seqIndex, true);
+				extern void ModelList_Rewind(void);
+				ModelList_Rewind();
+				GetParent()->Invalidate(false);
+			}
+		}
+	}
+
+	virtual void OnCancel() {
+		DestroyWindow();
+	}
+
+	virtual void PostNcDestroy();	// implemented after g_pAnimSearchDlg declaration
+
+	// Make the list resize with the dialog
+	virtual void OnSize(UINT nType, int cx, int cy) {
+		CDialog::OnSize(nType, cx, cy);
+		if (m_edit.m_hWnd && m_list.m_hWnd) {
+			m_edit.MoveWindow(40, 5, cx - 47, 14);
+			m_list.MoveWindow(7, 23, cx - 14, cy - 30);
+		}
+	}
+
+	DECLARE_MESSAGE_MAP()
+};
+
+BEGIN_MESSAGE_MAP(CAnimSearchDlg, CDialog)
+	ON_WM_SIZE()
+END_MESSAGE_MAP()
+
+static CAnimSearchDlg *g_pAnimSearchDlg = NULL;
+
+void CAnimSearchDlg::PostNcDestroy() {
+	g_pAnimSearchDlg = NULL;
+	CDialog::PostNcDestroy();
+	delete this;
+}
+
+void CMainFrame::OnSequencesSearch()
+{
+	if (!Model_Loaded()) return;
+
+	// If already open, bring to front
+	if (g_pAnimSearchDlg && IsWindow(g_pAnimSearchDlg->m_hWnd)) {
+		g_pAnimSearchDlg->SetForegroundWindow();
+		return;
+	}
+
+	g_pAnimSearchDlg = new CAnimSearchDlg(this);
+	g_pAnimSearchDlg->Create(IDD_ANIM_SEARCH, this);
+	g_pAnimSearchDlg->ShowWindow(SW_SHOW);
 }
 
 
@@ -392,52 +1108,33 @@ LPCSTR GetYearAsString(void)
 }
 
 
-void CMainFrame::OnViewScreenshotFile() 
+void CMainFrame::OnViewScreenshotFile()
 {
-	if (Model_Loaded())
+	if (!Model_Loaded())
+	{
+		ErrorBox("No model loaded!");
+		return;
+	}
+
+	// Build default filename from model name
+	CString strDefault;
+	strDefault.Format("%s.png", Filename_WithoutPath(Filename_PathOnly(Model_GetFullPrimaryFilename())));
+
+	CFileDialog dlg(FALSE, "png", strDefault,
+		OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY,
+		"PNG Files (*.png)|*.png|All Files (*.*)|*.*||",
+		this);
+	dlg.m_ofn.lpstrTitle = "Save Transparent Screenshot";
+
+	if (dlg.DoModal() == IDOK)
 	{
 		CWaitCursor wait;
+		CString strPath = dlg.GetPathName();
 
-		// slightly iffy here, I'm going to assume that the rendering context is still valid from last time.
-		// I can't do much else because I need to supply DC shit that I don't have in order to issue an OnDraw
-		//	command to do it legally, so fuck it...
-		//
-		gbTextInhibit = AppVars.bCleanScreenShots;	//true;
+		if (ScreenShotPNG_Transparent(strPath, g_iScreenWidth, g_iScreenHeight))
 		{
-			ModelList_Render( g_iScreenWidth, g_iScreenHeight );	// render to back buffer
-				
-			// generate a filename...
-			//
-			char sBaseName[MAX_PATH];
-			sprintf(sBaseName, Filename_WithoutPath(Filename_PathOnly(Model_GetFullPrimaryFilename())));
-			//
-			// look for a numbered slot to snapshot to...
-			//
-			#define NUM_SAVE_SLOTS 1000
-			for (int iName=0; iName<NUM_SAVE_SLOTS; iName++)
-			{
-				char sFilename[MAX_PATH];
-
-				if (iName==NUM_SAVE_SLOTS)
-				{
-					ErrorBox(va("Couldn't find a free save slot! (tried %d slots)",NUM_SAVE_SLOTS));
-				}
-
-				sprintf(sFilename, "c:\\%s_%03d.bmp",sBaseName,iName);
-
-				if (!FileExists(sFilename))
-				{
-					ScreenShot(sFilename,va("(C) Raven Software %s",GetYearAsString()));					
-					BMP_Free();
-					break;
-				}
-			}
+			ModelList_Render(g_iScreenWidth, g_iScreenHeight);
 		}
-		gbTextInhibit = false;
-	}
-	else
-	{
-		ErrorBox("No model loaded to work out path from!\n\n( So duhhhh... why try to take a snapshot? )");
 	}
 
 	m_splitter.Invalidate(false);
@@ -718,8 +1415,9 @@ void CMainFrame::OnUpdateEditPaste(CCmdUI* pCmdUI)
 	pCmdUI->Enable(false);
 }
 
-void CMainFrame::OnFileRefreshtextures() 
+void CMainFrame::OnFileRefreshtextures()
 {
+	KillAllShaderFiles();	// clear cached shader text + shader registry so they reload
 	TextureList_Refresh();
 	m_splitter.Invalidate(false);
 }
@@ -1434,7 +2132,7 @@ static void XLS_To_SP(void)
 
 				// line example:
 				//
-				// 02KYK004	Kyle	Jan?  I’ve found an exit.				
+				// 02KYK004	Kyle	Jan?  Iï¿½ve found an exit.				
 				//
 
 				// get the label...
