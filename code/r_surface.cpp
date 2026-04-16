@@ -19,6 +19,12 @@
 bool g_bRenderGlowingObjects = false;	// when true, only glow stages are rendered
 float g_fAccumulatedShaderTime = 0.0f;	// accumulated shader animation time
 
+// Saved primary model state for the glow pass (survives per-container reset)
+drawSurf_t g_glowDrawSurfs[MAX_DRAWSURFS];
+int g_glowNumDrawSurfs = 0;
+trRefEntity_t g_glowEntities[MAX_MOD_KNOWN];
+int g_glowNumEntities = 0;
+
 int giRenderedBoneWeights;
 int giOmittedBoneWeights;
 
@@ -564,6 +570,7 @@ static bool MouseOverTri(float x0, float x1, float x2, float y0, float y1, float
 static void RB_IterateStagesGeneric( shaderCommands_t *input )
 {
 	shader_t *shader = input->shader;
+
 	bool bUseMultiStage = shader && shader->numStages > 0 && !AppVars.bForceWhite && !AppVars.bWireFrame && AppVars.bShaderRendering
 						&& !input->bSurfaceIsG2Tag;  // tag surfaces use simple path (draw controlled by bShowTagSurfaces)
 
@@ -1561,6 +1568,10 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 
 		shader_t *sh = R_GetShaderByIndex( shaderIndex );
 
+		// During glow pass, skip non-glow surfaces entirely (no callbacks, no state changes)
+		if (g_bRenderGlowingObjects && (!sh || !sh->hasGlow))
+			continue;
+
 				RB_BeginSurface( sh, 0, drawSurf->skinOverrideBind );
 
 				tess.hModel = tr.refdef.entities[entityNum].e.hModel;
@@ -1611,7 +1622,7 @@ void RE_RenderDrawSurfs( void )
 // Lightsaber Blade Rendering
 // =============================================================================
 
-void RE_DrawSaberBlades( void )
+void RE_DrawSaberBlades( bool bGlowOnly )
 {
 	// Check if any blades are enabled
 	if (!AppVars.bSaberBlade[0] && !AppVars.bSaberBlade[1]) return;
@@ -1777,7 +1788,7 @@ void RE_DrawSaberBlades( void )
 		GLuint coreTex = saberTexSets[colorIdx].core;
 
 		// Save GL state
-		glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_DEPTH_BUFFER_BIT);
+		glPushAttrib(GL_ALL_ATTRIB_BITS);
 		glEnable(GL_TEXTURE_2D);
 		glDisable(GL_CULL_FACE);
 		glEnable(GL_BLEND);
@@ -1828,14 +1839,12 @@ void RE_DrawSaberBlades( void )
 		}
 
 		// ---- Core layer: textured billboard quad from hilt to tip ----
-		if (coreTex) glBindTexture(GL_TEXTURE_2D, coreTex);
-		float coreRadius = (bladeRadius / 3.0f + jitter * radiusRange) * corePulse;
-
-		// Core is near-white with slight color tint
-		glColor4f(0.8f + colR/1275.0f, 0.8f + colG/1275.0f, 0.8f + colB/1275.0f, 1.0f);
-		{
+		// Game's core shader (*_line) has no 'glow' keyword, so skip in glow-only mode
+		if (!bGlowOnly) {
+			if (coreTex) glBindTexture(GL_TEXTURE_2D, coreTex);
+			float coreRadius = (bladeRadius / 3.0f + jitter * radiusRange) * corePulse;
+			glColor4f(0.8f + colR/1275.0f, 0.8f + colG/1275.0f, 0.8f + colB/1275.0f, 1.0f);
 			float hw = coreRadius;
-			// U across width, V along blade - flip V (1=hilt, 0=tip)
 			glBegin(GL_QUADS);
 				glTexCoord2f(0,1); glVertex3f(origin[0]-coreRight[0]*hw, origin[1]-coreRight[1]*hw, origin[2]-coreRight[2]*hw);
 				glTexCoord2f(1,1); glVertex3f(origin[0]+coreRight[0]*hw, origin[1]+coreRight[1]*hw, origin[2]+coreRight[2]*hw);
@@ -1849,6 +1858,10 @@ void RE_DrawSaberBlades( void )
 
 		} // end bladeNum loop
 	}
+
+	// Reset glStateBits so it matches the actual GL state after popAttrib
+	extern unsigned int glStateBits;
+	glStateBits = 0;
 }
 
 
@@ -1923,15 +1936,14 @@ void RE_RenderGlowPass( void )
 	if (!AppVars.bDynamicGlow || !AppVars.bShaderRendering)
 		return;
 
-	// Check if any currently drawn surfaces use shaders with glow stages
-	bool bHasGlow = false;
-	for (int i = 0; i < tr.refdef.numDrawSurfs; i++) {
-		int shaderIndex = 0, entityNum = 0;
-		R_DecomposeSort(tr.refdef.drawSurfs[i].sort, &entityNum, &shaderIndex);
-		shader_t *sh = R_GetShaderByIndex(shaderIndex);
-		if (sh && sh->hasGlow) { bHasGlow = true; break; }
+	// Check if anything needs the glow pass
+	bool bHasGlowShaders = false;
+	for (int i = 0; i < R_GetNumShaders() && !bHasGlowShaders; i++) {
+		shader_t *sh = R_GetShaderByIndex(i);
+		if (sh && sh->hasGlow) bHasGlowShaders = true;
 	}
-	if (!bHasGlow) return;
+	bool bHasSaberBlades = (AppVars.bSaberBlade[0] || AppVars.bSaberBlade[1]);
+	if (!bHasGlowShaders && !bHasSaberBlades) return;
 
 	GLint viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);
@@ -1949,13 +1961,29 @@ void RE_RenderGlowPass( void )
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], screenW, screenH);
 
 	glClearColor(0, 0, 0, 0);
-	glClear(GL_COLOR_BUFFER_BIT);
-	g_bRenderGlowingObjects = true;
-	RB_RenderDrawSurfList(tr.refdef.drawSurfs, tr.refdef.numDrawSurfs);
-	g_bRenderGlowingObjects = false;
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	// Re-traverse the bolt tree rendering only glow stages.
+	// Each container renders with its correct GL matrix (bolt transforms).
+	RE_RenderAllGlowStages();
+
+	// Draw saber glow sprites into the glow buffer
+	if (AppVars.bSaberBlade[0] || AppVars.bSaberBlade[1]) {
+		RE_DrawSaberBlades(true);
+	}
+
 
 	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], screenW, screenH);
+
+	// Debug mode: just show the raw glow buffer, skip blur and compositing
+	if (AppVars.bDynamicGlowDebug) {
+		glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
+		glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
+		glPopMatrix(); glMatrixMode(GL_PROJECTION); glPopMatrix();
+		glEnableClientState(GL_VERTEX_ARRAY);
+		return;
+	}
 
 	// Step 2: Switch to 2D ortho with half-pixel offset for pixel-perfect mapping
 	glMatrixMode(GL_PROJECTION);

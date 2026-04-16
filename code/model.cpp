@@ -330,6 +330,7 @@ void AppVars_OnceOnlyInit(void)
 	AppVars.bDynamicGlow		=	true;
 	AppVars.bDynamicGlowSoft	=	true;
 	AppVars.bDynamicGlowFullbrightComp = true;
+	AppVars.bDynamicGlowDebug	=	false;
 	AppVars.entityRGBA[0]		=	255;
 	AppVars.entityRGBA[1]		=	255;
 	AppVars.entityRGBA[2]		=	255;
@@ -2628,7 +2629,7 @@ static void ModelContainer_CallBack_AddToDrawList(ModelContainer_t* pContainer, 
 
 		if (bProceed)
 		{
-			R_ModView_BeginEntityAdd();	// ##################
+			R_ModView_BeginEntityAdd();
 
 			// updateme?
 			R_ModView_AddEntity(pContainer->hModel,		// ModelHandle_t hModel,
@@ -2681,7 +2682,24 @@ static void ModelContainer_CallBack_AddToDrawList(ModelContainer_t* pContainer, 
 				RE_GenerateDrawSurfs();
 				RE_RenderDrawSurfs();
 			}
-			gpContainerBeingRendered = NULL;				
+			gpContainerBeingRendered = NULL;
+
+			// Save the primary model's draw surfs and entities for the glow pass.
+			// Only save from the primary container - bolted models render in their own
+			// GL matrix context that we can't reproduce in the glow pass.
+			if (pContainer == &AppVars.Container) {
+				extern drawSurf_t g_glowDrawSurfs[];
+				extern int g_glowNumDrawSurfs;
+				extern trRefEntity_t g_glowEntities[];
+				extern int g_glowNumEntities;
+
+				g_glowNumDrawSurfs = tr.refdef.numDrawSurfs;
+				if (g_glowNumDrawSurfs > MAX_DRAWSURFS) g_glowNumDrawSurfs = MAX_DRAWSURFS;
+				memcpy(g_glowDrawSurfs, tr.refdef.drawSurfs, g_glowNumDrawSurfs * sizeof(drawSurf_t));
+				g_glowNumEntities = tr.refdef.num_entities;
+				if (g_glowNumEntities > MAX_MOD_KNOWN) g_glowNumEntities = MAX_MOD_KNOWN;
+				memcpy(g_glowEntities, tr.refdef.entities, g_glowNumEntities * sizeof(trRefEntity_t));
+			}				
 			
 			ModelDraw_BoundingBox( pContainer, !!(pContainer == &AppVars.Container) );
 			ModelDraw_Floor		 ( pContainer, !!(pContainer == &AppVars.Container) );
@@ -2694,11 +2712,58 @@ static void ModelContainer_CallBack_AddToDrawList(ModelContainer_t* pContainer, 
 	glPopMatrix();
 }
 
+// Glow-only callback: same matrix setup as main callback, but only renders glow stages
+static void ModelContainer_CallBack_RenderGlow(ModelContainer_t* pContainer, void *pvData)
+{
+	glPushMatrix();
+	{
+		bool bProceed = ModelContainer_HandleAllEvilMatrixCode(pContainer);
+		if (bProceed)
+		{
+			R_ModView_BeginEntityAdd();
+			R_ModView_AddEntity(pContainer->hModel,
+								pContainer->iCurrentFrame_Primary,
+								AppVars.bInterpolate?pContainer->iOldFrame_Primary:pContainer->iCurrentFrame_Primary,
+								pContainer->iBoneNum_SecondaryStart,
+								pContainer->iCurrentFrame_Secondary,
+								AppVars.bInterpolate?pContainer->iOldFrame_Secondary:pContainer->iCurrentFrame_Secondary,
+								pContainer->iSurfaceNum_RootOverride,
+								AppVars.fFramefrac,
+								pContainer->slist, pContainer->blist,
+								pContainer->XFormedG2Bones, pContainer->XFormedG2BonesValid,
+								pContainer->XFormedG2TagSurfs, pContainer->XFormedG2TagSurfsValid,
+								&pContainer->iRenderedTris, &pContainer->iRenderedVerts,
+								&pContainer->iRenderedSurfs, &pContainer->iXformedG2Bones,
+								&pContainer->iRenderedBoneWeights, &pContainer->iOmittedBoneWeights);
+
+			extern bool g_bRenderGlowingObjects;
+			gpContainerBeingRendered = pContainer;
+			{
+				RE_GenerateDrawSurfs();
+				g_bRenderGlowingObjects = true;
+				RE_RenderDrawSurfs();
+				g_bRenderGlowingObjects = false;
+			}
+			gpContainerBeingRendered = NULL;
+		}
+	}
+	glPopMatrix();
+}
+
+void RE_RenderAllGlowStages(void)
+{
+	R_ModelContainer_Apply(&AppVars.Container, ModelContainer_CallBack_RenderGlow);
+}
+
 static void ModelList_AddModelsToDrawList(void)
 {
 	ModelDraw_InfoText_Header();
 
-//######### R_ModView_BeginEntityAdd();
+	// Reset glow data for this frame
+	{
+		extern int g_glowNumDrawSurfs;
+		g_glowNumDrawSurfs = 0;
+	}
 
 	// add all models to draw list... (now draws them as well, and prints stats)
 	//

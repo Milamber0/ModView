@@ -88,6 +88,8 @@ protected:
 	afx_msg void OnUpdateViewDynamicGlowSoft(CCmdUI* pCmdUI);
 	afx_msg void OnViewGlowFullbrightComp();
 	afx_msg void OnUpdateViewGlowFullbrightComp(CCmdUI* pCmdUI);
+	afx_msg void OnViewGlowDebug();
+	afx_msg void OnUpdateViewGlowDebug(CCmdUI* pCmdUI);
 	afx_msg void OnViewWeapons();
 	afx_msg void OnWeaponMenuCommand(UINT nID);
 	afx_msg void OnUpdateFileSave(CCmdUI* pCmdUI);

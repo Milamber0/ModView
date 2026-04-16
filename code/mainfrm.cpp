@@ -91,6 +91,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_DYNAMICGLOWSOFT, OnUpdateViewDynamicGlowSoft)
 	ON_COMMAND(ID_VIEW_GLOWFULLBRIGHTCOMP, OnViewGlowFullbrightComp)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_GLOWFULLBRIGHTCOMP, OnUpdateViewGlowFullbrightComp)
+	ON_COMMAND(ID_VIEW_GLOWDEBUG, OnViewGlowDebug)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_GLOWDEBUG, OnUpdateViewGlowDebug)
 	ON_COMMAND(ID_VIEW_WEAPONS, OnViewWeapons)
 	ON_COMMAND_RANGE(ID_WEAPON_FIRST, ID_WEAPON_LAST, OnWeaponMenuCommand)
 	ON_UPDATE_COMMAND_UI(ID_FILE_SAVE, OnUpdateFileSave)
@@ -598,6 +600,17 @@ void CMainFrame::OnViewGlowFullbrightComp()
 void CMainFrame::OnUpdateViewGlowFullbrightComp(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(AppVars.bDynamicGlowFullbrightComp);
+}
+
+void CMainFrame::OnViewGlowDebug()
+{
+	AppVars.bDynamicGlowDebug = !AppVars.bDynamicGlowDebug;
+	m_splitter.Invalidate(false);
+}
+
+void CMainFrame::OnUpdateViewGlowDebug(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(AppVars.bDynamicGlowDebug);
 }
 
 

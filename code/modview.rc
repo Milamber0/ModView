@@ -187,6 +187,7 @@ BEGIN
         MENUITEM "... using Dynamic Glow",      ID_VIEW_DYNAMICGLOW, CHECKED
         MENUITEM "... using Soft Glow",         ID_VIEW_DYNAMICGLOWSOFT, CHECKED
         MENUITEM "... Glow Fullbright Compensation", ID_VIEW_GLOWFULLBRIGHTCOMP, CHECKED
+        MENUITEM "... Glow Debug (show glow buffer)\tCTRL-Y", ID_VIEW_GLOWDEBUG
         MENUITEM "... Entity Color Picker...",  ID_VIEW_ENTITYCOLOR
         MENUITEM "... using Forced-white textures (for crack-finding)\tCTRL-H", ID_VIEW_FORCEWHITE
         MENUITEM "... using auto Crack-Highlighter (experimental)\tCTRL-K", ID_VIEW_CRACKVIEWER
@@ -481,6 +482,7 @@ BEGIN
     "P",            ID_FILE_PRINT,          VIRTKEY, CONTROL, NOINVERT
     "Q",            ID_VIEW_SHADERS,        VIRTKEY, CONTROL, NOINVERT
     "R",            ID_VIEW_RULER,          VIRTKEY, CONTROL, NOINVERT
+    "Y",            ID_VIEW_GLOWDEBUG,     VIRTKEY, CONTROL, NOINVERT
     "R",            ID_FILE_REFRESHTEXTURES, VIRTKEY, ALT, NOINVERT
     "S",            ID_VIEW_SURFACEHILITE,  VIRTKEY, CONTROL, NOINVERT
     "T",            ID_VIEW_TAGSURFACES,    VIRTKEY, CONTROL, NOINVERT

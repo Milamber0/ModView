@@ -109,7 +109,7 @@ BOOL CModViewView::OnPreparePrinting(CPrintInfo* pInfo)
 
 void CModViewView::OnBeginPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/)
 {
-	// TODO: adreld extra initialization before printing
+	// TODO: add extra initialization before printing
 }
 
 void CModViewView::OnEndPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/)

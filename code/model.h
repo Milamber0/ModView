@@ -253,6 +253,7 @@ typedef struct
 	bool	bDynamicGlow;
 	bool	bDynamicGlowSoft;
 	bool	bDynamicGlowFullbrightComp;
+	bool	bDynamicGlowDebug;		// show only the glow buffer (before blur)
 	byte	entityRGBA[4];		// entity color for rgbGen entity shaders
 
 	// Lightsaber blade settings

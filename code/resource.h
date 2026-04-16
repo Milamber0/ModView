@@ -190,6 +190,7 @@
 #define ID_VIEW_DYNAMICGLOW             32947
 #define ID_VIEW_DYNAMICGLOWSOFT         32948
 #define ID_VIEW_GLOWFULLBRIGHTCOMP      32949
+#define ID_VIEW_GLOWDEBUG              32960
 #define ID_VIEW_WEAPONS                 32950
 #define ID_WEAPON_REMOVEALL             32951
 #define IDD_WEAPON_DIALOG               162
