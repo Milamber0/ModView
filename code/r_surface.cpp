@@ -8,7 +8,16 @@
 #include "text.h"
 //
 #include "r_surface.h"
+#include "textures.h"
+#include <math.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+
+bool g_bRenderGlowingObjects = false;	// when true, only glow stages are rendered
+float g_fAccumulatedShaderTime = 0.0f;	// accumulated shader animation time
 
 int giRenderedBoneWeights;
 int giOmittedBoneWeights;
@@ -126,17 +135,27 @@ because a surface may be forced to perform a RB_End due
 to overflow.
 ==============
 */
-void RB_BeginSurface( shader_t *shader, int fogNum, GLuint gluiTextureBind ) {
+void RB_BeginSurface( shader_t *shader, int fogNum, GLuint gluiSkinOverrideBind ) {
 	tess.numIndexes = 0;
 	tess.numVertexes = 0;
-//MODVIEWREM	tess.shader = shader;
-//MODVIEWREM	tess.fogNum = fogNum;
-//MODVIEWREM	tess.dlightBits = 0;		// will be OR'd in by surface functions
-//MODVIEWREM	tess.xstages = shader->stages;
-//MODVIEWREM	tess.numPasses = shader->numUnfoggedPasses;
-//MODVIEWREM	tess.currentStageIteratorFunc = shader->optimalStageIteratorFunc;
-	tess.gluiTextureBind = gluiTextureBind;
+	tess.shader = shader;
+	tess.gluiTextureBind = gluiSkinOverrideBind; // non-zero means skin overrides first stage texture
 	tess.bSurfaceIsG2Tag = false;
+
+	// Shader animation time - pauses/resumes with the shader animation toggle,
+	// independent of model animation. Tracks accumulated play time only.
+	static DWORD lastTickWhenPlaying = 0;
+
+	DWORD now = GetTickCount();
+	if (AppVars.bShaderAnimation) {
+		if (lastTickWhenPlaying != 0) {
+			g_fAccumulatedShaderTime += (float)(now - lastTickWhenPlaying) / 1000.0f;
+		}
+		lastTickWhenPlaying = now;
+	} else {
+		lastTickWhenPlaying = 0;	// reset so next play doesn't jump
+	}
+	tess.shaderTime = g_fAccumulatedShaderTime;
 }
 
 
@@ -156,7 +175,7 @@ void RB_CheckOverflow( int verts, int indexes ) {
 		ri.Error(ERR_DROP, "RB_CheckOverflow: indices > MAX (%d > %d)", indexes, ACTUAL_SHADER_MAX_INDEXES );
 	}
 
-	RB_BeginSurface(NULL/*MODVIEWREM tess.shader*/, 0/*MODVIEWREM tess.fogNum*/, tess.gluiTextureBind );
+	RB_BeginSurface(tess.shader, 0, tess.gluiTextureBind );
 }
 
 
@@ -227,6 +246,9 @@ void R_ModView_AddEntity(ModelHandle_t hModel,			int iFrame_Primary, int iOldFra
 	trHackJob.e.pXFormedG2BonesValid	= pXFormedG2BonesValid;
 	trHackJob.e.pXFormedG2TagSurfs		= pXFormedG2TagSurfs;
 	trHackJob.e.pXFormedG2TagSurfsValid	= pXFormedG2TagSurfsValid;
+
+	// Entity color for rgbGen entity shaders
+	memcpy(trHackJob.e.shaderRGBA, AppVars.entityRGBA, 4);
 
 	// now add it to the list to be processed...
 	//
@@ -541,72 +563,316 @@ static bool MouseOverTri(float x0, float x1, float x2, float y0, float y1, float
 */
 static void RB_IterateStagesGeneric( shaderCommands_t *input )
 {
-/*	MODVIEWREM
-	int stage;
+	shader_t *shader = input->shader;
+	bool bUseMultiStage = shader && shader->numStages > 0 && !AppVars.bForceWhite && !AppVars.bWireFrame && AppVars.bShaderRendering
+						&& !input->bSurfaceIsG2Tag;  // tag surfaces use simple path (draw controlled by bShowTagSurfaces)
 
-	for ( stage = 0; stage < MAX_SHADER_STAGES; stage++ )
+	// --- Multi-stage shader rendering (textured, non-wireframe) ---
+	if ( bUseMultiStage )
 	{
-		shaderStage_t *pStage = tess.xstages[stage];
+		// Sync GL state tracking with actual GL state
+		extern unsigned int glStateBits;
+		glEnable( GL_DEPTH_TEST );
+		glDepthMask( GL_TRUE );
+		glDepthFunc( GL_LEQUAL );
+		glDisable( GL_ALPHA_TEST );
+		glDisable( GL_BLEND );
+		glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
+		glStateBits = GLS_DEPTHMASK_TRUE;
 
-		if ( !pStage )
-		{
-			break;
+		// Apply shader cull mode
+		if ( shader->cullType == CT_TWO_SIDED ) {
+			glDisable( GL_CULL_FACE );
+		} else {
+			glEnable( GL_CULL_FACE );
+			glCullFace( shader->cullType == CT_BACK_SIDED ? GL_BACK : GL_FRONT );
 		}
 
-		ComputeColors( pStage );
-		ComputeTexCoords( pStage );
-
-		if ( !setArraysOnce )
+		// Compute eye position in model space for per-vertex environment mapping.
+		// ModView transform: glTranslate(pos) * glScale(0.05) * glRotateX * glRotateY * glRotateZ
+		// Eye at origin in eye space -> model space = Rz^-1 * Ry^-1 * Rx^-1 * (1/scale) * (-translation)
+		float eyePos[3];
 		{
-			qglEnableClientState( GL_COLOR_ARRAY );
-			qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, input->svars.colors );
-		}
+			// Compute eye position in model space for environment mapping.
+			// The modelview matrix M = Translate * Scale(s) * Rotation.
+			// True eye in model space = R^T * (-translation / s), distance ~= translation/s.
+			// But this puts the eye very far away (1/s = 20x) making env maps too uniform.
+			// The game camera is typically ~100 units from the model.
+			// To match the game look, we place the eye at the rotation-corrected direction
+			// but at a game-like distance from the model center.
+			float mv[16];
+			glGetFloatv( GL_MODELVIEW_MATRIX, mv );
 
-		//
-		// do multitexture
-		//
-		if ( pStage->bundle[1].image[0] != 0 )
-		{
-			DrawMultitextured( input, stage );
-		}
-		else
-		{
+			// Get direction from model to eye (inverse rotation of translation)
+			float sx = sqrtf(mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2]);
+			if (sx < 0.0001f) sx = 0.0001f;
+			float invS2 = 1.0f / (sx * sx);
+			eyePos[0] = -(mv[0]*mv[12] + mv[1]*mv[13] + mv[2]*mv[14]) * invS2;
+			eyePos[1] = -(mv[4]*mv[12] + mv[5]*mv[13] + mv[6]*mv[14]) * invS2;
+			eyePos[2] = -(mv[8]*mv[12] + mv[9]*mv[13] + mv[10]*mv[14]) * invS2;
 
-			if ( !setArraysOnce )
-			{
-				qglTexCoordPointer( 2, GL_FLOAT, 0, input->svars.texcoords[0] );
+			// Clamp distance to game-like range for env mapping (~128 units)
+			float dist = sqrtf(eyePos[0]*eyePos[0] + eyePos[1]*eyePos[1] + eyePos[2]*eyePos[2]);
+			if (dist > 128.0f) {
+				float rescale = 128.0f / dist;
+				eyePos[0] *= rescale;
+				eyePos[1] *= rescale;
+				eyePos[2] *= rescale;
 			}
+		}
 
-			//
-			// set state
-			//
-			if ( pStage->bundle[0].vertexLightmap && ( r_vertexLight->integer || glConfig.hardwareType == GLHW_PERMEDIA2 ) && r_lightmap->integer )
-			{
-				GL_Bind( tr.whiteImage );
+		// Apply vertex deformations before drawing stages
+		if ( shader->numDeforms > 0 ) {
+			for ( int d = 0; d < shader->numDeforms; d++ ) {
+				deformStage_t *ds = &shader->deforms[d];
+				if ( ds->deformation == DEFORM_WAVE ) {
+					for ( int v = 0; v < input->numVertexes; v++ ) {
+						float off = (input->xyz[v][0] + input->xyz[v][1] + input->xyz[v][2]) * ds->deformationSpread;
+						float scale = EvalWaveForm( &ds->deformationWave, input->shaderTime + off / ds->deformationWave.frequency );
+
+						// Simpler: use the WAVEVALUE formula directly
+						int index = (int)(( ds->deformationWave.phase + off + input->shaderTime * ds->deformationWave.frequency ) * FUNCTABLE_SIZE) & FUNCTABLE_MASK;
+						float *table = NULL;
+						switch (ds->deformationWave.func) {
+							case GF_SIN:				table = sv_sinTable; break;
+							case GF_SQUARE:				table = sv_squareTable; break;
+							case GF_TRIANGLE:			table = sv_triangleTable; break;
+							case GF_SAWTOOTH:			table = sv_sawToothTable; break;
+							case GF_INVERSE_SAWTOOTH:	table = sv_inverseSawToothTable; break;
+							default:					table = sv_sinTable; break;
+						}
+						scale = ds->deformationWave.base + table[index] * ds->deformationWave.amplitude;
+
+						input->xyz[v][0] += input->normal[v][0] * scale;
+						input->xyz[v][1] += input->normal[v][1] * scale;
+						input->xyz[v][2] += input->normal[v][2] * scale;
+					}
+				}
+				else if ( ds->deformation == DEFORM_MOVE ) {
+					int index = (int)(( ds->deformationWave.phase + input->shaderTime * ds->deformationWave.frequency ) * FUNCTABLE_SIZE) & FUNCTABLE_MASK;
+					float scale = ds->deformationWave.base + sv_sinTable[index] * ds->deformationWave.amplitude;
+					for ( int v = 0; v < input->numVertexes; v++ ) {
+						input->xyz[v][0] += ds->moveVector[0] * scale;
+						input->xyz[v][1] += ds->moveVector[1] * scale;
+						input->xyz[v][2] += ds->moveVector[2] * scale;
+					}
+				}
 			}
-			else 
-				R_BindAnimatedImage( &pStage->bundle[0] );
+			// Re-submit modified vertex data
+			glVertexPointer( 3, GL_FLOAT, 16, input->xyz );
+		}
 
+		for ( int stage = 0; stage < shader->numStages; stage++ )
+		{
+			shaderStage_t *pStage = &shader->stages[stage];
+			if ( !pStage->active ) continue;
+			if ( pStage->bundle[0].isLightmap ) continue;
+
+			// Glow pass: only render glow stages. Normal pass: render everything.
+			if ( g_bRenderGlowingObjects && !pStage->glow ) continue;
+
+			// Specular stages need per-vertex alpha computation
+			bool bPerVertexColor = false;
+
+			// Set per-stage GL state (blending, depth, alpha test)
 			GL_State( pStage->stateBits );
 
-			//
-			// draw
-			//
+			// Compute base texture coordinates based on tcGen
+			bool tcModified = false;
+			if ( pStage->bundle[0].tcGen == TCGEN_ENVIRONMENT_MAPPED ) {
+				// Per-vertex environment mapping: reflect per-vertex viewer direction off normal
+				// (matches game's RB_CalcEnvironmentTexCoords)
+				for ( int v = 0; v < input->numVertexes; v++ ) {
+					float viewer[3];
+					viewer[0] = eyePos[0] - input->xyz[v][0];
+					viewer[1] = eyePos[1] - input->xyz[v][1];
+					viewer[2] = eyePos[2] - input->xyz[v][2];
+					// normalize
+					float len = viewer[0]*viewer[0] + viewer[1]*viewer[1] + viewer[2]*viewer[2];
+					if (len > 0.00001f) {
+						float il = 1.0f / sqrtf(len);
+						viewer[0] *= il; viewer[1] *= il; viewer[2] *= il;
+					}
+					float *n = input->normal[v];
+					float d = 2.0f * (n[0]*viewer[0] + n[1]*viewer[1] + n[2]*viewer[2]);
+					float reflected[3];
+					reflected[0] = n[0] * d - viewer[0];
+					reflected[1] = n[1] * d - viewer[1];
+					reflected[2] = n[2] * d - viewer[2];
+					// Q3 convention: X=forward, Y=left, Z=up
+					// env map projects onto YZ plane: S=Y, T=Z
+					input->svars.texcoords[0][v][0] = 0.5f + reflected[0] * 0.5f;
+					input->svars.texcoords[0][v][1] = 0.5f - reflected[2] * 0.5f;
+				}
+				// Apply tcMod on top of env-mapped coords
+				if ( pStage->bundle[0].numTexMods > 0 ) {
+					RB_CalcTexMods( &pStage->bundle[0], input->shaderTime,
+						input->svars.texcoords[0], input->svars.texcoords[0], input->numVertexes );
+				}
+				glTexCoordPointer( 2, GL_FLOAT, 0, input->svars.texcoords[0] );
+				tcModified = true;
+			}
+			else if ( pStage->bundle[0].numTexMods > 0 ) {
+				// Copy base UVs from interleaved array (stride 16: [base,lightmap] per vertex)
+				// into packed svars array (stride 8) before applying tcMod
+				for ( int v = 0; v < input->numVertexes; v++ ) {
+					input->svars.texcoords[0][v][0] = input->texCoords[v][0][0];
+					input->svars.texcoords[0][v][1] = input->texCoords[v][0][1];
+				}
+				RB_CalcTexMods( &pStage->bundle[0], input->shaderTime,
+					input->svars.texcoords[0], input->svars.texcoords[0], input->numVertexes );
+				glTexCoordPointer( 2, GL_FLOAT, 0, input->svars.texcoords[0] );
+				tcModified = true;
+			}
+
+			// Bind texture - use shader's own texture, not skin override
+			// Skin override only applies when shader is a default (no .shader definition)
+			if ( stage == 0 && input->gluiTextureBind && shader->defaultShader ) {
+				glBindTexture( GL_TEXTURE_2D, input->gluiTextureBind );
+			} else {
+				R_BindAnimatedImage( &pStage->bundle[0], input->shaderTime );
+			}
+
+			// Compute and apply per-stage vertex color based on rgbGen/alphaGen
+			{
+				float r = 1.0f, g = 1.0f, b = 1.0f, a = 1.0f;
+
+				byte *entityRGBA = input->pRefEnt ? input->pRefEnt->shaderRGBA : NULL;
+
+				switch ( pStage->rgbGen ) {
+					case CGEN_IDENTITY:
+					case CGEN_IDENTITY_LIGHTING:
+					case CGEN_LIGHTING_DIFFUSE:
+						r = g = b = 1.0f;
+						break;
+					case CGEN_ENTITY:
+					case CGEN_LIGHTING_DIFFUSE_ENTITY:	// fullbright: diffuse(1) * entity = entity
+						if (entityRGBA) { r = entityRGBA[0]/255.0f; g = entityRGBA[1]/255.0f; b = entityRGBA[2]/255.0f; }
+						break;
+					case CGEN_ONE_MINUS_ENTITY:
+						if (entityRGBA) { r = 1.0f-entityRGBA[0]/255.0f; g = 1.0f-entityRGBA[1]/255.0f; b = 1.0f-entityRGBA[2]/255.0f; }
+						break;
+					case CGEN_CONST:
+						r = pStage->constantColor[0] / 255.0f;
+						g = pStage->constantColor[1] / 255.0f;
+						b = pStage->constantColor[2] / 255.0f;
+						break;
+					case CGEN_WAVEFORM: {
+						float v = EvalWaveForm( &pStage->rgbWave, input->shaderTime );
+						if (v < 0) v = 0; if (v > 1) v = 1;
+						r = g = b = v;
+						break;
+					}
+					default:
+						break;
+				}
+
+				switch ( pStage->alphaGen ) {
+					case AGEN_IDENTITY:
+						a = 1.0f;
+						break;
+					case AGEN_ENTITY:
+						if (entityRGBA) a = entityRGBA[3] / 255.0f;
+						break;
+					case AGEN_ONE_MINUS_ENTITY:
+						if (entityRGBA) a = 1.0f - entityRGBA[3] / 255.0f;
+						break;
+					case AGEN_CONST:
+						a = pStage->constantColor[3] / 255.0f;
+						break;
+					case AGEN_WAVEFORM: {
+						float v = EvalWaveForm( &pStage->alphaWave, input->shaderTime );
+						if (v < 0) v = 0; if (v > 1) v = 1;
+						a = v;
+						break;
+					}
+					case AGEN_LIGHTING_SPECULAR: {
+						// Per-vertex specular: reflect fixed light off normal, dot with viewer, ^4
+						// Light from above-forward in model space (Q3: X=fwd, Y=left, Z=up)
+						float lightDir[3] = { 0.29f, 0.29f, 0.91f }; // ~above-forward-left
+						byte rb = (byte)(r * 255), gb = (byte)(g * 255), bb = (byte)(b * 255);
+						for ( int sv = 0; sv < input->numVertexes; sv++ ) {
+							float *n = input->normal[sv];
+
+							// Reflect light off normal
+							float d = 2.0f * (n[0]*lightDir[0] + n[1]*lightDir[1] + n[2]*lightDir[2]);
+							float ref[3];
+							ref[0] = n[0]*d - lightDir[0];
+							ref[1] = n[1]*d - lightDir[1];
+							ref[2] = n[2]*d - lightDir[2];
+
+							// Viewer direction (from vertex toward eye)
+							float vw[3];
+							vw[0] = eyePos[0] - input->xyz[sv][0];
+							vw[1] = eyePos[1] - input->xyz[sv][1];
+							vw[2] = eyePos[2] - input->xyz[sv][2];
+							float il = 1.0f / (sqrtf(vw[0]*vw[0] + vw[1]*vw[1] + vw[2]*vw[2]) + 0.0001f);
+
+							// Specular = dot(reflected, viewer)^4
+							float l = (ref[0]*vw[0] + ref[1]*vw[1] + ref[2]*vw[2]) * il;
+							int spec;
+							if (l <= 0) { spec = 0; }
+							else { l = l*l; l = l*l; spec = (int)(l * 255); if (spec > 255) spec = 255; }
+
+							input->svars.colors[sv][0] = rb;
+							input->svars.colors[sv][1] = gb;
+							input->svars.colors[sv][2] = bb;
+							input->svars.colors[sv][3] = (byte)spec;
+						}
+						bPerVertexColor = true;
+						break;
+					}
+					default:
+						break;
+				}
+
+				if (bPerVertexColor) {
+					glEnableClientState( GL_COLOR_ARRAY );
+					glColorPointer( 4, GL_UNSIGNED_BYTE, 0, input->svars.colors );
+				} else {
+					glDisableClientState( GL_COLOR_ARRAY );
+					glColor4f( r, g, b, a );
+				}
+			}
+
+			// Draw this stage
 			R_DrawElements( input->numIndexes, input->indexes );
+
+			// Restore texcoord pointer if we modified it
+			if ( tcModified ) {
+				glTexCoordPointer( 2, GL_FLOAT, 16, input->texCoords );
+			}
 		}
 
-		// allow skipping out to show just lightmaps during development
-		if ( r_lightmap->integer && ( pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap || pStage->bundle[0].vertexLightmap ) )
-		{
-			break;
+		// Reset state after multi-stage rendering
+		GL_State( GLS_DEFAULT );
+		glDisableClientState( GL_COLOR_ARRAY );
+		glColor4f( 1, 1, 1, 1 );
+
+		// Restore cull state to ModView defaults
+		if (AppVars.bShowPolysAsDoubleSided && !AppVars.bForceWhite)
+			glDisable( GL_CULL_FACE );
+		else {
+			glEnable( GL_CULL_FACE );
+			glCullFace( GL_FRONT );
 		}
+
+		// Drain any GL errors to prevent driver stalls
+		while (glGetError() != GL_NO_ERROR) {}
 	}
-*/		
-	glBindTexture( GL_TEXTURE_2D, input->gluiTextureBind );
+	else
+	{
+		// --- Simple single-texture path (force-white, wireframe, or no shader) ---
+		if ( AppVars.bForceWhite )
+		{
+			glBindTexture( GL_TEXTURE_2D, 0 );	// no texture = solid white
+		}
+		else if ( input->gluiTextureBind )
+			glBindTexture( GL_TEXTURE_2D, input->gluiTextureBind );
+		else if ( shader && shader->numStages > 0 && shader->stages[0].bundle[0].textures[0] )
+			glBindTexture( GL_TEXTURE_2D, shader->stages[0].bundle[0].textures[0] );
+	}
 
-
-		
-	
 	{// note additional loop I put here for overriding polys to be wireframe - Ste.
 
 		glPushAttrib(GL_ENABLE_BIT | GL_POLYGON_BIT);	// preserves GL_CULL_FACE, GL_CULL_FACE_MODE, GL_POLYGON_MODE
@@ -665,7 +931,8 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 						}
 					}
 					
-					R_DrawElements( input->numIndexes, input->indexes );	// the standard surface draw code
+					if (!bUseMultiStage) // multi-stage already drew via its own loop
+						R_DrawElements( input->numIndexes, input->indexes );	// the standard surface draw code
 				}
 
 				if (b2PassForWire)
@@ -1029,7 +1296,20 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 				input->pRefEnt->pXFormedG2TagSurfs		[input->iSurfaceNum] = Jmatrix;
 				input->pRefEnt->pXFormedG2TagSurfsValid	[input->iSurfaceNum] = true;
 
-	//			OutputDebugString(va("Tag surf %d is valid\n",input->iSurfaceNum));
+				{
+					static int logCount = 0;
+					if (logCount < 50) {
+						FILE *f = fopen("C:\\Projects\\ModView\\shader_log.txt", logCount == 0 ? "w" : "a");
+						if (f) {
+							LPCSTR name = Model_GetSurfaceName(input->hModel, input->iSurfaceNum);
+							fprintf(f, "Tag surf %d '%s' origin=(%.1f,%.1f,%.1f)\n",
+								input->iSurfaceNum, name ? name : "?",
+								Jmatrix.matrix[0][3], Jmatrix.matrix[1][3], Jmatrix.matrix[2][3]);
+							fclose(f);
+						}
+						logCount++;
+					}
+				}
 			}
 		}
 		glPopAttrib();
@@ -1276,73 +1556,12 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 		}
 		oldSort = drawSurf->sort;
 */
-		GLuint gluiTextureBind = 0;
-		R_DecomposeSort( drawSurf->sort, &entityNum, &gluiTextureBind);//MODVIEWREM	, &shader, &fogNum, &dlighted );
-/*
-		//
-		// change the tess parameters if needed
-		// a "entityMergable" shader is a shader that can have surfaces from seperate
-		// entities merged into a single batch, like smoke and blood puff sprites
-		if (shader != oldShader || fogNum != oldFogNum || dlighted != oldDlighted 
-			|| ( entityNum != oldEntityNum && !shader->entityMergable ) ) {
-			if (oldShader != NULL) {
-				RB_EndSurface();
-			}
-			RB_BeginSurface( shader, fogNum );
-			oldShader = shader;
-			oldFogNum = fogNum;
-			oldDlighted = dlighted;
-		}
+		int shaderIndex = 0;
+		R_DecomposeSort( drawSurf->sort, &entityNum, &shaderIndex );
 
-		//
-		// change the modelview matrix if needed
-		//
-		if ( entityNum != oldEntityNum ) {
-			depthRange = qfalse;
+		shader_t *sh = R_GetShaderByIndex( shaderIndex );
 
-			if ( entityNum != ENTITYNUM_WORLD ) {
-				backEnd.currentEntity = &backEnd.refdef.entities[entityNum];
-				backEnd.refdef.floatTime = originalTime - backEnd.currentEntity->e.shaderTime;
-
-				// set up the transformation matrix
-*/
-				////////////////////////////////R_RotateForEntity( backEnd.currentEntity, &backEnd.viewParms, &backEnd.or );
-/*
-				// set up the dynamic lighting if needed
-				if ( backEnd.currentEntity->needDlights ) {
-					R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
-				}
-
-				if ( backEnd.currentEntity->e.renderfx & RF_DEPTHHACK ) {
-					// hack the depth range to prevent view model from poking into walls
-					depthRange = qtrue;
-				}
-			} else {
-				backEnd.currentEntity = &tr.worldEntity;
-				backEnd.refdef.floatTime = originalTime;
-				backEnd.or = backEnd.viewParms.world;
-				R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
-			}
-*/
-			//////////////////////////////////////glLoadMatrixf( backEnd.or.modelMatrix );
-/*
-			//
-			// change depthrange if needed
-			//
-			if ( oldDepthRange != depthRange ) {
-				if ( depthRange ) {
-					qglDepthRange (0, 0.3);
-				} else {
-					qglDepthRange (0, 1);
-				}
-				oldDepthRange = depthRange;
-			}
-
-			oldEntityNum = entityNum;
-		}
-*/
-
-				RB_BeginSurface( 0,0, gluiTextureBind);//shader, fogNum );				
+				RB_BeginSurface( sh, 0, drawSurf->skinOverrideBind );
 
 				tess.hModel = tr.refdef.entities[entityNum].e.hModel;
 				tess.pRefEnt=&tr.refdef.entities[entityNum].e;
@@ -1385,6 +1604,508 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 void RE_RenderDrawSurfs( void )
 {
 	RB_RenderDrawSurfList( tr.refdef.drawSurfs, tr.refdef.numDrawSurfs );
+}
+
+
+// =============================================================================
+// Lightsaber Blade Rendering
+// =============================================================================
+
+void RE_DrawSaberBlades( void )
+{
+	// Check if any blades are enabled
+	if (!AppVars.bSaberBlade[0] && !AppVars.bSaberBlade[1]) return;
+
+	// For each hand that has a blade on, find the bolted saber model's *blade1 tag
+	// and draw the blade from there
+	ModelHandle_t hPrimary = Model_GetPrimaryHandle();
+	if (!hPrimary) return;
+
+	for (int hand = 0; hand < 2; hand++)
+	{
+		if (!AppVars.bSaberBlade[hand]) continue;
+
+		// Find the tag surface for this hand on the primary model
+		LPCSTR psHandTag = (hand == 0) ? "*r_hand" : "*l_hand";
+		int iHandBolt = Model_GetBoltIndex(hPrimary, psHandTag, false);
+		if (iHandBolt == -1) continue;
+
+		// Check if something is bolted there
+		ModelContainer_t *pContainer = ModelContainer_FindFromModelHandle(hPrimary);
+		if (!pContainer) continue;
+		if (iHandBolt >= (int)pContainer->tSurfaceBolt_BoltPoints.size()) continue;
+		if (pContainer->tSurfaceBolt_BoltPoints[iHandBolt].vBoltedContainers.empty()) continue;
+
+		// Get the bolted saber model
+		ModelContainer_t *pSaber = &pContainer->tSurfaceBolt_BoltPoints[iHandBolt].vBoltedContainers[0];
+
+		mdxaBone_t &handMat = pContainer->XFormedG2TagSurfs[iHandBolt];
+
+		// Iterate all blade bolts on the saber (*blade1, *blade2, ... or *flash as fallback)
+		// Game: "Assume bladeNum is equal to the bolt index because bolts should be added in order"
+		for (int bladeNum = 0; bladeNum < 8; bladeNum++)
+		{
+		char bladeBoltName[32];
+		sprintf(bladeBoltName, "*blade%d", bladeNum + 1);
+		int iBladeBolt = Model_GetBoltIndex(pSaber->hModel, bladeBoltName, false, true);
+		if (iBladeBolt == -1) {
+			if (bladeNum == 0) {
+				iBladeBolt = Model_GetBoltIndex(pSaber->hModel, "*flash", false, true);
+			}
+			if (iBladeBolt == -1) break;  // no more blades
+		}
+
+		if (!pSaber->XFormedG2TagSurfsValid[iBladeBolt]) continue;
+
+		mdxaBone_t &bladeMat = pSaber->XFormedG2TagSurfs[iBladeBolt];
+
+		// The blade matrix is in saber-local space. Transform origin and direction
+		// to scene space using the parent's hand bolt matrix.
+		float bladeLocalOrigin[3], bladeLocalDir[3];
+		bladeLocalOrigin[0] = bladeMat.matrix[0][3];
+		bladeLocalOrigin[1] = bladeMat.matrix[1][3];
+		bladeLocalOrigin[2] = bladeMat.matrix[2][3];
+		// Direction from the blade bolt matrix: NEGATIVE column 0
+		// col0 points down (-Z in saber space), so -col0 points up along the blade
+		bladeLocalDir[0] = -bladeMat.matrix[0][0];
+		bladeLocalDir[1] = -bladeMat.matrix[1][0];
+		bladeLocalDir[2] = -bladeMat.matrix[2][0];
+
+		// Transform origin: scene_origin = handMat * bladeLocalOrigin (rotate + translate)
+		float origin[3];
+		origin[0] = handMat.matrix[0][0]*bladeLocalOrigin[0] + handMat.matrix[0][1]*bladeLocalOrigin[1] + handMat.matrix[0][2]*bladeLocalOrigin[2] + handMat.matrix[0][3];
+		origin[1] = handMat.matrix[1][0]*bladeLocalOrigin[0] + handMat.matrix[1][1]*bladeLocalOrigin[1] + handMat.matrix[1][2]*bladeLocalOrigin[2] + handMat.matrix[1][3];
+		origin[2] = handMat.matrix[2][0]*bladeLocalOrigin[0] + handMat.matrix[2][1]*bladeLocalOrigin[1] + handMat.matrix[2][2]*bladeLocalOrigin[2] + handMat.matrix[2][3];
+
+		// Transform direction: scene_dir = handMat * bladeLocalDir (rotate only, no translate)
+		float dir[3];
+		dir[0] = handMat.matrix[0][0]*bladeLocalDir[0] + handMat.matrix[0][1]*bladeLocalDir[1] + handMat.matrix[0][2]*bladeLocalDir[2];
+		dir[1] = handMat.matrix[1][0]*bladeLocalDir[0] + handMat.matrix[1][1]*bladeLocalDir[1] + handMat.matrix[1][2]*bladeLocalDir[2];
+		dir[2] = handMat.matrix[2][0]*bladeLocalDir[0] + handMat.matrix[2][1]*bladeLocalDir[1] + handMat.matrix[2][2]*bladeLocalDir[2];
+
+		float bladeLen = AppVars.saberLength;
+		float bladeRadius = 3.0f;  // world units, matches game default
+
+		// Compute end point
+		float end[3];
+		end[0] = origin[0] + dir[0] * bladeLen;
+		end[1] = origin[1] + dir[1] * bladeLen;
+		end[2] = origin[2] + dir[2] * bladeLen;
+
+		// Blade flicker - game uses Q_flrand per frame for glow radius jitter
+		extern float g_fAccumulatedShaderTime;
+		float radiusRange = bladeRadius * 0.075f;
+		float radiusStart = bladeRadius - radiusRange;
+		// Per-frame random jitter (pseudo-random from time, different per hand)
+		float jitter = 0.0f;
+		if (AppVars.bShaderAnimation) {
+			unsigned int seed = (unsigned int)(g_fAccumulatedShaderTime * 1000.0f) + hand * 7919 + bladeNum * 3571;
+			seed = (seed * 1103515245 + 12345);  // simple LCG
+			jitter = ((seed >> 16) & 0x7FFF) / (float)0x7FFF * 2.0f - 1.0f;  // -1 to 1
+		}
+		float glowRadiusMult = 1.0f;
+		float saberGlowRadius = (radiusStart + jitter * radiusRange) * glowRadiusMult;
+
+		// Core pulse: game uses abs(sin(time/400)) * 0.1 + 0.8
+		float corePulse = 1.0f;
+		if (AppVars.bShaderAnimation) {
+			corePulse = fabsf(sinf(g_fAccumulatedShaderTime * (float)M_PI / 0.4f)) * 0.1f + 0.8f;
+		}
+
+		// Get camera axes in model space for billboarding
+		// Must normalize since the modelview includes the 0.05 display scale
+		float mv[16];
+		glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+		float camRight[3] = { mv[0], mv[4], mv[8] };
+		float camUp[3]    = { mv[1], mv[5], mv[9] };
+		float rNorm = sqrtf(camRight[0]*camRight[0]+camRight[1]*camRight[1]+camRight[2]*camRight[2]);
+		float uNorm = sqrtf(camUp[0]*camUp[0]+camUp[1]*camUp[1]+camUp[2]*camUp[2]);
+		if (rNorm > 0.001f) { camRight[0]/=rNorm; camRight[1]/=rNorm; camRight[2]/=rNorm; }
+		if (uNorm > 0.001f) { camUp[0]/=uNorm; camUp[1]/=uNorm; camUp[2]/=uNorm; }
+
+		// Compute "right" for the core quad (perpendicular to blade and view)
+		float v1[3] = { origin[0] - camRight[0]*100, origin[1] - camRight[1]*100, origin[2] - camRight[2]*100 };
+		float v2[3] = { end[0] - camRight[0]*100, end[1] - camRight[1]*100, end[2] - camRight[2]*100 };
+		// cross(origin_to_view, end_to_view) like the game does
+		float viewToStart[3] = { -mv[2]-origin[0]*mv[0]-origin[1]*mv[4]-origin[2]*mv[8],
+		                          -mv[6]-origin[0]*mv[1]-origin[1]*mv[5]-origin[2]*mv[9],
+		                          -mv[10]-origin[0]*mv[2]-origin[1]*mv[6]-origin[2]*mv[10] };
+		float viewToEnd[3] = { -mv[2]-end[0]*mv[0]-end[1]*mv[4]-end[2]*mv[8],
+		                        -mv[6]-end[0]*mv[1]-end[1]*mv[5]-end[2]*mv[9],
+		                        -mv[10]-end[0]*mv[2]-end[1]*mv[6]-end[2]*mv[10] };
+		// Simpler: just cross blade direction with camera forward
+		float camFwd[3] = { mv[2], mv[6], mv[10] };
+		float coreRight[3];
+		coreRight[0] = dir[1]*camFwd[2] - dir[2]*camFwd[1];
+		coreRight[1] = dir[2]*camFwd[0] - dir[0]*camFwd[2];
+		coreRight[2] = dir[0]*camFwd[1] - dir[1]*camFwd[0];
+		float crLen = sqrtf(coreRight[0]*coreRight[0]+coreRight[1]*coreRight[1]+coreRight[2]*coreRight[2]);
+		if (crLen > 0.001f) { coreRight[0]/=crLen; coreRight[1]/=crLen; coreRight[2]/=crLen; }
+
+		// Determine saber color
+		int colorIdx = AppVars.saberColorIndex[hand];
+		if (colorIdx < 0 || colorIdx > 6) colorIdx = 0;
+
+		// For preset colors, the texture is pre-colored so tint white.
+		// For custom (index 6), the blend texture is neutral so tint with custom RGB.
+		byte colR, colG, colB;
+		if (colorIdx == 6) {
+			colR = AppVars.saberCustomColor[hand][0];
+			colG = AppVars.saberCustomColor[hand][1];
+			colB = AppVars.saberCustomColor[hand][2];
+		} else {
+			colR = colG = colB = 255;
+		}
+
+		// Load saber textures per color (once)
+		// 0=blue,1=green,2=yellow,3=orange,4=red,5=purple,6=custom(blend)
+		struct SaberTexSet { GLuint glow; GLuint core; };
+		static SaberTexSet saberTexSets[7] = {{0}};
+		static bool saberTexLoaded = false;
+		if (!saberTexLoaded) {
+			static const char *colorNames[] = { "blue","green","yellow","orange","red","purple","blend" };
+			for (int c = 0; c < 7; c++) {
+				int h = Texture_LoadDirect(va("gfx/effects/sabers/%s_glow2", colorNames[c]));
+				if (h > 0) saberTexSets[c].glow = Texture_GetGLBind(h);
+				h = Texture_LoadDirect(va("gfx/effects/sabers/%s_line", colorNames[c]));
+				if (h > 0) saberTexSets[c].core = Texture_GetGLBind(h);
+			}
+			saberTexLoaded = true;
+		}
+
+		GLuint glowTex = saberTexSets[colorIdx].glow;
+		GLuint coreTex = saberTexSets[colorIdx].core;
+
+		// Save GL state
+		glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_DEPTH_BUFFER_BIT);
+		glEnable(GL_TEXTURE_2D);
+		glDisable(GL_CULL_FACE);
+		glEnable(GL_BLEND);
+		glEnable(GL_DEPTH_TEST);
+		glDepthMask(GL_FALSE);
+		glBlendFunc(GL_ONE, GL_ONE);
+
+		// ---- Glow layer: textured overlapping sprites along the blade ----
+		if (glowTex) glBindTexture(GL_TEXTURE_2D, glowTex);
+		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+		float glowRadius = saberGlowRadius;
+		float glowStep = glowRadius * 0.65f;
+		if (glowStep < 0.5f) glowStep = 0.5f;
+		glColor4f(colR/255.0f, colG/255.0f, colB/255.0f, 1.0f);
+
+		for (float dist = bladeLen; dist > 0; dist -= glowStep) {
+			float pos[3];
+			pos[0] = origin[0] + dir[0] * dist;
+			pos[1] = origin[1] + dir[1] * dist;
+			pos[2] = origin[2] + dir[2] * dist;
+
+			float r = glowRadius;
+			float lx = camRight[0]*r, ly = camRight[1]*r, lz = camRight[2]*r;
+			float ux = camUp[0]*r, uy = camUp[1]*r, uz = camUp[2]*r;
+
+			glBegin(GL_QUADS);
+				glTexCoord2f(0,0); glVertex3f(pos[0]-lx-ux, pos[1]-ly-uy, pos[2]-lz-uz);
+				glTexCoord2f(1,0); glVertex3f(pos[0]+lx-ux, pos[1]+ly-uy, pos[2]+lz-uz);
+				glTexCoord2f(1,1); glVertex3f(pos[0]+lx+ux, pos[1]+ly+uy, pos[2]+lz+uz);
+				glTexCoord2f(0,1); glVertex3f(pos[0]-lx+ux, pos[1]-ly+uy, pos[2]-lz+uz);
+			glEnd();
+
+			glowRadius += 0.017f;
+		}
+
+		// Hilt glow sprite
+		{
+			float r = 5.5f + jitter * 0.25f;  // game: 5.5f + Q_flrand(0,1)*0.25f
+			float lx = camRight[0]*r, ly = camRight[1]*r, lz = camRight[2]*r;
+			float ux = camUp[0]*r, uy = camUp[1]*r, uz = camUp[2]*r;
+			glBegin(GL_QUADS);
+				glTexCoord2f(0,0); glVertex3f(origin[0]-lx-ux, origin[1]-ly-uy, origin[2]-lz-uz);
+				glTexCoord2f(1,0); glVertex3f(origin[0]+lx-ux, origin[1]+ly-uy, origin[2]+lz-uz);
+				glTexCoord2f(1,1); glVertex3f(origin[0]+lx+ux, origin[1]+ly+uy, origin[2]+lz+uz);
+				glTexCoord2f(0,1); glVertex3f(origin[0]-lx+ux, origin[1]-ly+uy, origin[2]-lz+uz);
+			glEnd();
+		}
+
+		// ---- Core layer: textured billboard quad from hilt to tip ----
+		if (coreTex) glBindTexture(GL_TEXTURE_2D, coreTex);
+		float coreRadius = (bladeRadius / 3.0f + jitter * radiusRange) * corePulse;
+
+		// Core is near-white with slight color tint
+		glColor4f(0.8f + colR/1275.0f, 0.8f + colG/1275.0f, 0.8f + colB/1275.0f, 1.0f);
+		{
+			float hw = coreRadius;
+			// U across width, V along blade - flip V (1=hilt, 0=tip)
+			glBegin(GL_QUADS);
+				glTexCoord2f(0,1); glVertex3f(origin[0]-coreRight[0]*hw, origin[1]-coreRight[1]*hw, origin[2]-coreRight[2]*hw);
+				glTexCoord2f(1,1); glVertex3f(origin[0]+coreRight[0]*hw, origin[1]+coreRight[1]*hw, origin[2]+coreRight[2]*hw);
+				glTexCoord2f(1,0); glVertex3f(end[0]+coreRight[0]*hw, end[1]+coreRight[1]*hw, end[2]+coreRight[2]*hw);
+				glTexCoord2f(0,0); glVertex3f(end[0]-coreRight[0]*hw, end[1]-coreRight[1]*hw, end[2]-coreRight[2]*hw);
+			glEnd();
+		}
+
+		// Restore GL state
+		glPopAttrib();
+
+		} // end bladeNum loop
+	}
+}
+
+
+// =============================================================================
+// Dynamic Glow Post-Process
+//
+// Pipeline: copy scene → render glow-only → copy glow → blur → composite
+// Uses glCopyTexSubImage2D (no FBO/shaders required)
+// =============================================================================
+
+static GLuint g_glowSceneTexture = 0;
+static GLuint g_glowBlurTexture = 0;
+static int g_glowTexWidth = 0;
+static int g_glowTexHeight = 0;
+
+static int NextPowerOf2(int v) {
+	int p = 1;
+	while (p < v) p <<= 1;
+	return p;
+}
+
+static void Glow_EnsureTextures(int screenW, int screenH)
+{
+	int texW = NextPowerOf2(screenW);
+	int texH = NextPowerOf2(screenH);
+
+	if (g_glowSceneTexture && g_glowTexWidth == texW && g_glowTexHeight == texH)
+		return; // already set up at right size
+
+	g_glowTexWidth = texW;
+	g_glowTexHeight = texH;
+
+	if (!g_glowSceneTexture) glGenTextures(1, &g_glowSceneTexture);
+	if (!g_glowBlurTexture) glGenTextures(1, &g_glowBlurTexture);
+
+	// Scene texture: NEAREST for pixel-perfect copy-back, 16-bit for precision
+	glBindTexture(GL_TEXTURE_2D, g_glowSceneTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+	// Blur texture: LINEAR for smooth blur sampling, 16-bit for precision, clamp to black border
+	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	float borderColor[4] = {0, 0, 0, 0};
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+}
+
+// Draw a fullscreen quad textured with the given texture
+static void Glow_DrawFullscreenQuad(GLuint texture, int screenW, int screenH)
+{
+	float maxS = (float)screenW / (float)g_glowTexWidth;
+	float maxT = (float)screenH / (float)g_glowTexHeight;
+
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glBegin(GL_QUADS);
+		glTexCoord2f(0, 0);		glVertex2f(0, 0);
+		glTexCoord2f(maxS, 0);		glVertex2f((float)screenW, 0);
+		glTexCoord2f(maxS, maxT);	glVertex2f((float)screenW, (float)screenH);
+		glTexCoord2f(0, maxT);		glVertex2f(0, (float)screenH);
+	glEnd();
+}
+
+void RE_RenderGlowPass( void )
+{
+	if (!AppVars.bDynamicGlow || !AppVars.bShaderRendering)
+		return;
+
+	// Check if any currently drawn surfaces use shaders with glow stages
+	bool bHasGlow = false;
+	for (int i = 0; i < tr.refdef.numDrawSurfs; i++) {
+		int shaderIndex = 0, entityNum = 0;
+		R_DecomposeSort(tr.refdef.drawSurfs[i].sort, &entityNum, &shaderIndex);
+		shader_t *sh = R_GetShaderByIndex(shaderIndex);
+		if (sh && sh->hasGlow) { bHasGlow = true; break; }
+	}
+	if (!bHasGlow) return;
+
+	GLint viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	int screenW = viewport[2];
+	int screenH = viewport[3];
+	if (screenW <= 0 || screenH <= 0) return;
+
+	Glow_EnsureTextures(screenW, screenH);
+
+	float maxS = (float)screenW / (float)g_glowTexWidth;
+	float maxT = (float)screenH / (float)g_glowTexHeight;
+
+	// Step 1: Copy scene to texture, render glow-only, copy glow to texture
+	glBindTexture(GL_TEXTURE_2D, g_glowSceneTexture);
+	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], screenW, screenH);
+
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	g_bRenderGlowingObjects = true;
+	RB_RenderDrawSurfList(tr.refdef.drawSurfs, tr.refdef.numDrawSurfs);
+	g_bRenderGlowingObjects = false;
+
+	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
+	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], screenW, screenH);
+
+	// Step 2: Switch to 2D ortho with half-pixel offset for pixel-perfect mapping
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	glOrtho(0, screenW, 0, screenH, -1, 1);
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glEnable(GL_TEXTURE_2D);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+
+	// Step 3: Restore scene from texture (pixel-perfect with NEAREST + half-pixel ortho)
+	glDisable(GL_BLEND);
+	glColor4f(1, 1, 1, 1);
+	Glow_DrawFullscreenQuad(g_glowSceneTexture, screenW, screenH);
+
+	// Step 4: Multi-pass blur matching game defaults:
+	// r_DynamicGlowPasses=5, r_DynamicGlowDelta=0.8, r_DynamicGlowIntensity=1.13
+	// Game blurs at 25% resolution, so at full res we need 4x offsets and reduced intensity
+	// Match game defaults exactly: r_DynamicGlowPasses=5, Delta=0.8, Intensity=1.13, Scale=0.25
+	// Using GL_RGBA16 textures like the game for precision across 5 blur passes
+	int   glowPasses    = 5;
+	float glowDelta     = 0.8f;
+	float glowStartOff  = 0.1f;
+	float glowIntensity = 1.13f;
+	float tapWeight     = glowIntensity * 0.25f;
+
+	// Quarter resolution like the game (r_DynamicGlowScale = 0.25)
+	int blurW = screenW / 4;
+	int blurH = screenH / 4;
+	if (blurW < 1) blurW = 1;
+	if (blurH < 1) blurH = 1;
+
+	// Clear the entire blur texture to black first (prevents edge bleed from stale data)
+	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, g_glowTexWidth, g_glowTexHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+	// Render downsample into the blur viewport area
+	glViewport(viewport[0], viewport[1], blurW, blurH);
+	glMatrixMode(GL_PROJECTION); glLoadIdentity();
+	glOrtho(0, blurW, 0, blurH, -1, 1);
+	glMatrixMode(GL_MODELVIEW); glLoadIdentity();
+
+	glScissor(viewport[0], viewport[1], blurW, blurH);
+	glEnable(GL_SCISSOR_TEST);
+
+	// Downsample: draw full-res glow into half-res viewport
+	glDisable(GL_BLEND);
+	glColor4f(1, 1, 1, 1);
+	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
+	// The blur texture still has full-res glow from the copy. Draw it downsampled.
+	glBegin(GL_QUADS);
+		glTexCoord2f(0, 0);		glVertex2f(0, 0);
+		glTexCoord2f(maxS, 0);		glVertex2f((float)blurW, 0);
+		glTexCoord2f(maxS, maxT);	glVertex2f((float)blurW, (float)blurH);
+		glTexCoord2f(0, maxT);		glVertex2f(0, (float)blurH);
+	glEnd();
+	// Copy downsampled result back - now texture has half-res data in [0,blurMaxS]x[0,blurMaxT]
+	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
+	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], blurW, blurH);
+
+	float blurMaxS = (float)blurW / (float)g_glowTexWidth;
+	float blurMaxT = (float)blurH / (float)g_glowTexHeight;
+
+	// Multi-pass blur at quarter resolution
+	// Game: offset starts at 0.1 texels, adds 0.8 per pass (in blur-buffer pixels)
+	// Convert to normalized texcoords: 1 blur texel = 1/texWidth in texcoord space
+	float fTexelOffset = glowStartOff;
+	for (int pass = 0; pass < glowPasses; pass++) {
+		// Offset in normalized texcoords (1 blur pixel = 1/g_glowTexWidth)
+		float offS = fTexelOffset / (float)g_glowTexWidth;
+		float offT = fTexelOffset / (float)g_glowTexHeight;
+
+		glClearColor(0, 0, 0, 0);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_ONE, GL_ONE);
+		glColor4f(tapWeight, tapWeight, tapWeight, 1.0f);
+		glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
+
+		float offs[4][2] = {{-offS,-offT},{-offS,offT},{offS,-offT},{offS,offT}};
+		for (int t = 0; t < 4; t++) {
+			glBegin(GL_QUADS);
+				glTexCoord2f(offs[t][0], offs[t][1]);						glVertex2f(0, 0);
+				glTexCoord2f(blurMaxS+offs[t][0], offs[t][1]);				glVertex2f((float)blurW, 0);
+				glTexCoord2f(blurMaxS+offs[t][0], blurMaxT+offs[t][1]);		glVertex2f((float)blurW, (float)blurH);
+				glTexCoord2f(offs[t][0], blurMaxT+offs[t][1]);				glVertex2f(0, (float)blurH);
+			glEnd();
+		}
+
+		glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
+		glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], blurW, blurH);
+
+		fTexelOffset += glowDelta;
+	}
+
+	glDisable(GL_SCISSOR_TEST);
+
+	// Step 5: Restore full viewport, draw scene, overlay blurred glow
+	glViewport(viewport[0], viewport[1], screenW, screenH);
+	glMatrixMode(GL_PROJECTION); glLoadIdentity();
+	glOrtho(0, screenW, 0, screenH, -1, 1);
+	glMatrixMode(GL_MODELVIEW); glLoadIdentity();
+
+	glDisable(GL_BLEND);
+	glColor4f(1, 1, 1, 1);
+	Glow_DrawFullscreenQuad(g_glowSceneTexture, screenW, screenH);
+
+	// Glow overlay: stretch quarter-res blur to full screen
+	// Inset texcoords slightly to prevent edge sampling past valid data
+	float halfTexelS = 0.5f / (float)g_glowTexWidth;
+	float halfTexelT = 0.5f / (float)g_glowTexHeight;
+	glEnable(GL_BLEND);
+	if (AppVars.bDynamicGlowSoft)
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+	else
+		glBlendFunc(GL_ONE, GL_ONE);
+	// Fullbright compensation: dim the overlay since fullbright leaves no headroom for glow
+	float glowOverlay = 1.0f;
+	if (AppVars.bDynamicGlowFullbrightComp)
+		glowOverlay = AppVars.bDynamicGlowSoft ? 0.65f : 0.45f;
+	glColor4f(glowOverlay, glowOverlay, glowOverlay, 1);
+	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
+	glBegin(GL_QUADS);
+		glTexCoord2f(halfTexelS, halfTexelT);								glVertex2f(0, 0);
+		glTexCoord2f(blurMaxS - halfTexelS, halfTexelT);					glVertex2f((float)screenW, 0);
+		glTexCoord2f(blurMaxS - halfTexelS, blurMaxT - halfTexelT);		glVertex2f((float)screenW, (float)screenH);
+		glTexCoord2f(halfTexelS, blurMaxT - halfTexelT);					glVertex2f(0, (float)screenH);
+	glEnd();
+
+	// Step 6: Restore GL state
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+
+	glEnableClientState(GL_VERTEX_ARRAY);
 }
 
 
