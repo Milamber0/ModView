@@ -88,7 +88,7 @@ void CModViewView::OnDraw(CDC* pDC)
 	if (m_hRC && m_hDC)
 	{
 		if (wglMakeCurrent(m_hDC,m_hRC))
-		{	
+		{
 			ModelList_Render(m_iWindowWidth, m_iWindowDepth);
 
 			SwapBuffers(pDC->GetSafeHdc());
@@ -109,7 +109,7 @@ BOOL CModViewView::OnPreparePrinting(CPrintInfo* pInfo)
 
 void CModViewView::OnBeginPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/)
 {
-	// TODO: add extra initialization before printing
+	// TODO: adreld extra initialization before printing
 }
 
 void CModViewView::OnEndPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/)
@@ -142,30 +142,30 @@ CModViewDoc* CModViewView::GetDocument() // non-debug version is inline
 // CModViewView message handlers
 
 
-BOOL CModViewView::Create(LPCTSTR lpszClassName, LPCTSTR lpszWindowName, DWORD dwStyle, const RECT& rect, CWnd* pParentWnd, UINT nID, CCreateContext* pContext) 
+BOOL CModViewView::Create(LPCTSTR lpszClassName, LPCTSTR lpszWindowName, DWORD dwStyle, const RECT& rect, CWnd* pParentWnd, UINT nID, CCreateContext* pContext)
 {
 	m_hRC = 0;	// rendering context
 	m_hDC = 0;	// device context
 	m_iWindowWidth = m_iWindowDepth = 0;
 	m_TimerHandle_Update100FPS = 0;
-	
+
 	return CWnd::Create(lpszClassName, lpszWindowName, dwStyle, rect, pParentWnd, nID, pContext);
 }
 
-int CModViewView::OnCreate(LPCREATESTRUCT lpCreateStruct) 
+int CModViewView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
 	if (CView::OnCreate(lpCreateStruct) == -1)
 		return -1;
 
 	AppVars.hWnd = m_hWnd;
-	
+
 	m_hDC = ::GetDC(m_hWnd);
 
 	m_hRC = GL_GenerateRC(m_hDC, true );	// bool bDoubleBuffer
 
-	m_TimerHandle_Update100FPS = SetTimer(	th_100FPS,	// UINT nIDEvent, 
+	m_TimerHandle_Update100FPS = SetTimer(	th_100FPS,	// UINT nIDEvent,
 											10,				// UINT nElapse, (in milliseconds)
-											NULL				// void (CALLBACK EXPORT* lpfnTimer)(HWND, UINT, UINT, DWORD) 
+											NULL				// void (CALLBACK EXPORT* lpfnTimer)(HWND, UINT, UINT, DWORD)
 										);
 
 	if (!m_TimerHandle_Update100FPS)
@@ -174,12 +174,12 @@ int CModViewView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	}
 
 	OnceOnly_GLVarsInit();
-	
+
 	return 0;
 }
 
 // app shutdown
-void CModViewView::OnDestroy() 
+void CModViewView::OnDestroy()
 {
 	AppVars.bFinished = true;	// may be useful
 
@@ -213,19 +213,19 @@ void CModViewView::OnDestroy()
 	CView::OnDestroy();
 }
 
-void CModViewView::OnSize(UINT nType, int cx, int cy) 
+void CModViewView::OnSize(UINT nType, int cx, int cy)
 {
 	CView::OnSize(nType, cx, cy);
-	
+
 	m_iWindowWidth = cx;
-	m_iWindowDepth = cy;	
+	m_iWindowDepth = cy;
 
 	g_iScreenWidth = cx;
 	g_iScreenHeight= cy;
 }
 
 
-BOOL CModViewView::OnEraseBkgnd(CDC* pDC) 
+BOOL CModViewView::OnEraseBkgnd(CDC* pDC)
 {
 	// actually this looks nicer to not do it at all, so...
 	//
@@ -237,11 +237,11 @@ BOOL CModViewView::OnEraseBkgnd(CDC* pDC)
 
 	CRect rect;
 	pDC->GetClipBox(&rect);     // Erase the area needed
-	pDC->PatBlt(rect.left, rect.top, rect.Width(), rect.Height(), PATCOPY); 
-	
-	pDC->SelectObject(pOldBrush); 
+	pDC->PatBlt(rect.left, rect.top, rect.Width(), rect.Height(), PATCOPY);
+
+	pDC->SelectObject(pOldBrush);
 	  */
-	return TRUE;   	
+	return TRUE;
 }
 
 
@@ -292,14 +292,14 @@ void Gallery_AddWarning(LPCSTR psText)
 }
 
 //
-void CModViewView::OnTimer(UINT nIDEvent) 
+void CModViewView::OnTimer(UINT nIDEvent)
 {
 	if (nIDEvent != th_100FPS)
 	{
 		CView::OnTimer(nIDEvent);
 		return;
 	}
-	
+
 
 	// otherwise, it's one of our timer events, so...
 
@@ -326,13 +326,22 @@ void CModViewView::OnTimer(UINT nIDEvent)
 		}
 	}
 
-//	if (!DraggingMouse()) 
+//	if (!DraggingMouse())
 	{
 		if (ModelList_Animation())
 		{
 			// one or more models have updated frames (or lerping)...
-			//
 			Invalidate(false);
+		}
+		else if (AppVars.bShaderAnimation)
+		{
+			// Throttle shader animation redraws to ~30 FPS to avoid overwhelming SwapBuffers
+			static DWORD lastShaderRedraw = 0;
+			DWORD now = GetTickCount();
+			if (now - lastShaderRedraw >= 33) {
+				lastShaderRedraw = now;
+				Invalidate(false);
+			}
 		}
 	}
 
@@ -353,7 +362,7 @@ void CModViewView::OnTimer(UINT nIDEvent)
 
 				static bool bSnapshotTakingPlace = false;
 				if (!bSnapshotTakingPlace)
-				{				
+				{
 					int iRemainingPlusOne = GalleryRead_ExtractEntry(strCaption, strScript);
 					if (iRemainingPlusOne)	// because 0 would be fail/empty
 					{
@@ -361,10 +370,10 @@ void CModViewView::OnTimer(UINT nIDEvent)
 						StatusMessage( va("( Gallery: %d remaining )", giGalleryItemsRemaining) );
 						OutputDebugString(va("\"%s\" (script len %d)\n",(LPCSTR)strCaption,strScript.GetLength()));
 
-						strScript += "\n";			
+						strScript += "\n";
 
 						string strOutputFileName( va("%s\\%s",scGetTempPath(),"temp.mvs") );
-							
+
 						int iReturn = SaveFile(strOutputFileName.c_str(),(LPCSTR)strScript, strScript.GetLength());
 						if (iReturn != -1)
 						{
@@ -431,17 +440,17 @@ void CModViewView::OnTimer(UINT nIDEvent)
 				else
 				{
 					if (giRenderCount == 2)	// ... so it's rendered to back buffer for snapshot, and front for user
-					{	
+					{
 						//
 						// generate a filename...
-						//				
+						//
 						char sOutputFileName[MAX_PATH];
 						CString strBaseName(strCaption);
 						while (strBaseName.Replace("\t"," "));
 						while (strBaseName.Replace("  "," "));
 						sprintf(sOutputFileName, "%s\\%s.bmp",Gallery_GetOutputDir(),strBaseName);
 						ScreenShot(sOutputFileName,/*strCaption*/strBaseName);
-						BMP_Free();			
+						BMP_Free();
 
 						bSnapshotTakingPlace = false;	// trigger next snapshot
 					}
@@ -468,64 +477,64 @@ bool DraggingMouse()
 	return !!(sys_rbuttondown || sys_lbuttondown || sys_mbuttondown);
 }
 POINT DragStartPoint;
-void CModViewView::OnLButtonDown(UINT nFlags, CPoint point) 
+void CModViewView::OnLButtonDown(UINT nFlags, CPoint point)
 {
 	GetCursorPos(&DragStartPoint);
 
 	start_drag( (mkey_enum)nFlags, DragStartPoint.x, DragStartPoint.y );
 	SetCapture();
-	ShowCursor(false); 
+	ShowCursor(false);
 	sys_lbuttondown = true;
 
 //	CView::OnLButtonDown(nFlags, point);
 }
 
 
-void CModViewView::OnLButtonUp(UINT nFlags, CPoint point) 
+void CModViewView::OnLButtonUp(UINT nFlags, CPoint point)
 {
 //	CView::OnLButtonUp(nFlags, point);
 
-	if (sys_lbuttondown) 
+	if (sys_lbuttondown)
 	{
 		ReleaseCapture();
-		ShowCursor( true ); 	
+		ShowCursor( true );
 		end_drag( (mkey_enum)nFlags, point.x, point.y );
 		sys_lbuttondown = false;
 	}
 }
 
-void CModViewView::OnRButtonDown(UINT nFlags, CPoint point) 
+void CModViewView::OnRButtonDown(UINT nFlags, CPoint point)
 {
 	GetCursorPos(&DragStartPoint);
 
 	start_drag( (mkey_enum)nFlags, DragStartPoint.x, DragStartPoint.y );
 	SetCapture();
-	ShowCursor(false); 
+	ShowCursor(false);
 	sys_rbuttondown = true;
 
 //	CView::OnRButtonDown(nFlags, point);
 }
 
-void CModViewView::OnRButtonUp(UINT nFlags, CPoint point) 
+void CModViewView::OnRButtonUp(UINT nFlags, CPoint point)
 {
 //	CView::OnRButtonUp(nFlags, point);
 
-	if (sys_rbuttondown) 
+	if (sys_rbuttondown)
 	{
-		ReleaseCapture(); 
-		ShowCursor( true ); 
+		ReleaseCapture();
+		ShowCursor( true );
 		end_drag( (mkey_enum)nFlags, point.x, point.y );
 		sys_rbuttondown = false;
 	}
 }
 
-void CModViewView::OnMouseMove(UINT nFlags, CPoint point) 
+void CModViewView::OnMouseMove(UINT nFlags, CPoint point)
 {
 	CView::OnMouseMove(nFlags, point);
 
 	GetCursorPos(&point);
 
-	if (!DraggingMouse()) 
+	if (!DraggingMouse())
 	{
 		ScreenToClient(&point);
 		g_iViewAreaMouseX = point.x;
@@ -539,32 +548,32 @@ void CModViewView::OnMouseMove(UINT nFlags, CPoint point)
 
 	if (drag( (mkey_enum)nFlags, point.x, point.y ))
 	{
-		SetCursorPos(DragStartPoint.x,DragStartPoint.y);		
+		SetCursorPos(DragStartPoint.x,DragStartPoint.y);
 		//OutputDebugString("drag-painting\n");
 		Invalidate(false);
-		//UpdateWindow();		
+		//UpdateWindow();
 	}
 }
 
 
-BOOL CModViewView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt) 
+BOOL CModViewView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 {
 	// wheel down = -ve, wheel up = +ve zDelta (test vals were +/-120, but just check sign)
 	//
 	OutputDebugString(va("zDelta = %d\n",zDelta));
-	
+
 	return CView::OnMouseWheel(nFlags, zDelta, pt);
 }
 
 
 typedef unsigned int MBChar_t;
 MBChar_t *UTF8AsciiToMBC(LPCSTR psSource)
-{		
+{
 	static vector <MBChar_t>	Out;
 								Out.clear();
 	typedef struct
 	{
-		byte bRangeStart, bRangeStop;		
+		byte bRangeStart, bRangeStop;
 		byte b1stByteAND;
 		byte bBytesLong;
 		byte b2ndRangeStart,b2ndRangeStop;
@@ -581,7 +590,7 @@ MBChar_t *UTF8AsciiToMBC(LPCSTR psSource)
 	};
 
 	while (*psSource)
-	{			
+	{
 		byte b = *psSource++;
 
 		MBChar_t m=0;
@@ -599,7 +608,7 @@ MBChar_t *UTF8AsciiToMBC(LPCSTR psSource)
 				{
 					b = *psSource++;
 					if (b)
-					{					
+					{
 						const int iShift = (UTF8DecodeTable[i].bBytesLong-2)-j;
 						m |= (b&63) << (iShift*6);
 					}
