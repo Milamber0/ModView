@@ -12,6 +12,37 @@
 #include "wintalk.h"
 #include "textures.h"
 #include "Splash.h"
+#include <afxadv.h>
+
+// Custom MRU list that shows "parentfolder/model.glm" instead of just "model.glm"
+class CModelRecentFileList : public CRecentFileList
+{
+public:
+	CModelRecentFileList(UINT nStart, LPCTSTR lpszSection, LPCTSTR lpszEntryFormat, int nSize, int nMaxDispLen = AFX_ABBREV_FILENAME_LEN)
+		: CRecentFileList(nStart, lpszSection, lpszEntryFormat, nSize, nMaxDispLen) {}
+
+	virtual BOOL GetDisplayName(CString& strName, int nIndex, LPCTSTR lpszCurDir, int nCurDir, BOOL bAtLeastName = TRUE) const
+	{
+		if (nIndex < 0 || nIndex >= m_nSize || m_arrNames[nIndex].IsEmpty())
+			return FALSE;
+
+		// Extract "parentfolder/filename" from the full path
+		CString fullPath = m_arrNames[nIndex];
+		int lastSlash = fullPath.ReverseFind('\\');
+		if (lastSlash < 0) lastSlash = fullPath.ReverseFind('/');
+		if (lastSlash >= 0) {
+			CString withoutFile = fullPath.Left(lastSlash);
+			int prevSlash = withoutFile.ReverseFind('\\');
+			if (prevSlash < 0) prevSlash = withoutFile.ReverseFind('/');
+			if (prevSlash >= 0) {
+				strName = fullPath.Mid(prevSlash + 1);
+				return TRUE;
+			}
+		}
+		strName = fullPath;
+		return TRUE;
+	}
+};
 
 bool gbStartMinimized = false;
 
@@ -88,6 +119,16 @@ BOOL CModViewApp::InitInstance()
 	SetRegistryKey(_T("Local AppWizard-Generated Applications"));
 
 	LoadStdProfileSettings(16);  // Load standard INI file options (including MRU)
+
+	// Replace MFC's default MRU with our custom one that shows parent folder names
+	if (m_pRecentFileList) {
+		CModelRecentFileList *pNewMRU = new CModelRecentFileList(
+			m_pRecentFileList->m_nStart, _T("Recent File List"), _T("File%d"),
+			m_pRecentFileList->m_nSize, m_pRecentFileList->m_nMaxDisplayLength);
+		pNewMRU->ReadList();
+		delete m_pRecentFileList;
+		m_pRecentFileList = pNewMRU;
+	}
 
 	// Register the application's document templates.  Document templates
 	//  serve as the connection between documents, frame windows and views.
