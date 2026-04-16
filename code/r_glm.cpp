@@ -1455,32 +1455,20 @@ void R_RenderSurfaces(surfaceInfo_t *slist, trRefEntity_t *ent, int iLOD)//MODVI
 	int			i;
 	shader_t	*shader = 0;
 	GLuint gluiTextureBind = 0;
-	
+
 	// back track and get the surfinfo struct for this surface
 	mdxmSurface_t			*surface = tr.currentModel->mdxmsurf[iLOD][slist->surface];
 	mdxmHierarchyOffsets_t	*surfIndexes = (mdxmHierarchyOffsets_t *)((byte *)tr.currentModel->mdxm + sizeof(mdxmHeader_t));
 	mdxmSurfHierarchy_t		*surfInfo = (mdxmSurfHierarchy_t *)((byte *)surfIndexes + surfIndexes->offsets[surface->thisSurfaceIndex]);
-	
+
 	// if this surface is not off, add it to the shader render list
 	//
 	// Update, previously I checked to see if we should actually render tag surfaces, but because of the
-	//	way I do surface bolt-ons I now always pass them on to the renderer to do the xform calcs, 
+	//	way I do surface bolt-ons I now always pass them on to the renderer to do the xform calcs,
 	//
 	if (AppVars.iSurfaceNumToHighlight == surface->thisSurfaceIndex ||
-		slist->offFlags == SURF_ON 
-/*
-		&&
-			(
-				// special check for displaying tag surfaces or not...
-				//
-				AppVars.bShowTagSurfaces						// show tag surfaces as well (in which case anything's fine)
-				|| !(surfInfo->flags & G2SURFACEFLAG_ISBOLT)	// ... or this isn't a tag surface so don't worry
-				//	or it is a tag surface, but we're highlighting either all tag surfaces, or just this one explicitly
-				|| (AppVars.bSurfaceHighlight && (AppVars.iSurfaceNumToHighlight == iITEMHIGHLIGHT_ALL_TAGSURFACES || AppVars.iSurfaceNumToHighlight == surface->thisSurfaceIndex))
-				//  or it is a tag surface, but something's bolted to it so we need to process it to fill in matrix info for bolted object
-				|| (Model_CountItemsBoltedHere(ent->e.hModel, surface->thisSurfaceIndex, false))	// aaarggh!!! This is horrible!!!
-			)
-*/
+		slist->offFlags == SURF_ON ||
+		(surfInfo->flags & G2SURFACEFLAG_ISBOLT)	// tag surfaces always processed for bolt matrix computation
 		)
 	{
 		// set the surface info to point at the where the transformed bone list is going to be for when the surface gets rendered out
@@ -1513,55 +1501,69 @@ void R_RenderSurfaces(surfaceInfo_t *slist, trRefEntity_t *ent, int iLOD)//MODVI
 		else 
 		{
 */
-			//shader = R_GetShaderByHandle( surfInfo->shaderIndex );
+			// Look up the shader for this surface's material
+		{
+			shader_t *sh = NULL;
+			GLuint skinBind = 0;
+
+			// Tag surfaces (bolt points) must ALWAYS be processed - their rendering
+			// computes the bolt transformation matrix needed for weapon/model bolting
+			bool bIsTagSurface = !!(surfInfo->flags & G2SURFACEFLAG_ISBOLT);
 
 			if (AppVars.bForceWhite)
 			{
-				gluiTextureBind = 0;
+				sh = R_GetShaderByIndex(0);
 			}
 			else
 			{
-				if (surfInfo->shaderIndex == -1)
+				// Get skin GL bind - if it's *off (-1), skip (unless it's a tag surface)
+				skinBind = AnySkin_GetGLBind( ent->e.hModel, surfInfo->shader, surfInfo->name );
+				if (skinBind == (GLuint)-1 && !bIsTagSurface)
 				{
-					gluiTextureBind = AnySkin_GetGLBind( ent->e.hModel, surfInfo->shader, surfInfo->name );					
+					sh = NULL;
+				}
+				else if (skinBind == (GLuint)-1)
+				{
+					skinBind = 0;	// tag surface: clear the -1, let it through with no texture
 				}
 				else
 				{
-					gluiTextureBind = Texture_GetGLBind( surfInfo->shaderIndex );
+					LPCSTR psShaderName = AnySkin_GetShaderName( ent->e.hModel, surfInfo->shader, surfInfo->name );
+					if ( psShaderName && !strcmp(psShaderName, "*off") && !bIsTagSurface ) {
+						sh = NULL;
+					} else {
+						if ( !psShaderName || !psShaderName[0] || !strcmp(psShaderName, "*off") )
+							psShaderName = surfInfo->shader;
+
+						if ( psShaderName && psShaderName[0] )
+							sh = R_FindShader( psShaderName );
+					}
 				}
 			}
-/*
-		}
-		// we will add shadows even if the main object isn't visible in the view
 
-		// stencil shadows can't do personal models unless I polyhedron clip
-		if ( !personalModel
-			&& r_shadows->integer == 2 
-			&& fogNum == 0
-			&& !(ent->e.renderfx & ( RF_NOSHADOW | RF_DEPTHHACK ) ) 
-			&& shader->sort == SS_OPAQUE ) 
-		{
-			R_AddDrawSurf( (surfaceType_t *)slist, tr.shadowShader, 0, qfalse );
-		}
+			// Check if the shader has a valid texture (even default shaders from direct model paths)
+			bool bShaderHasTexture = sh && sh->numStages > 0 && sh->stages[0].bundle[0].textures[0] != 0;
 
-		// projection shadows work fine with personal models
-		if ( r_shadows->integer == 3
-			&& fogNum == 0
-			&& (ent->e.renderfx & RF_SHADOW_PLANE )
-			&& shader->sort == SS_OPAQUE ) 
-		{
-			R_AddDrawSurf( (surfaceType_t *)slist, tr.projectionShadowShader, 0, qfalse );
-		}
-
-		// don't add third_person objects if not viewing through a portal
-		if ( !personalModel ) 
-		{
-			R_AddDrawSurf( (surfaceType_t *)slist, shader, fogNum, qfalse );
-		}
-		*/
-		if (gluiTextureBind != (GLuint)-1)
-		{
-			R_AddDrawSurf((surfaceType_t *)slist, gluiTextureBind);
+			if (sh && !sh->defaultShader)
+			{
+				R_AddDrawSurf((surfaceType_t *)slist, sh->index, skinBind);
+			}
+			else if (skinBind && skinBind != (GLuint)-1)
+			{
+				R_AddDrawSurf((surfaceType_t *)slist, sh ? sh->index : 0, skinBind);
+			}
+			else if (bShaderHasTexture)
+			{
+				// Default shader but has a valid texture (e.g. weapon models with direct texture paths)
+				R_AddDrawSurf((surfaceType_t *)slist, sh->index, 0);
+			}
+			else if (bIsTagSurface)
+			{
+				// Tag surfaces always need to be in the draw list for bolt matrix computation.
+				// The renderer controls whether they're visually drawn based on bShowTagSurfaces.
+				R_AddDrawSurf((surfaceType_t *)slist, 0, 0);
+			}
+			// else: no shader, no skin, not a tag - skip
 		}
 	}
 	else

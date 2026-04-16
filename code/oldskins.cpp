@@ -94,21 +94,32 @@ LPCSTR OldSkins_Parse(LPCSTR psSkinName, LPCSTR psText)
 }
 
 // converts stuff like "<path>/stormtrooper_blue.skin" to "blue"...
+// For JKA part skins like "head_a1.skin", keeps full name "head_a1"
 //
 LPCSTR OldSkins_FilenameToSkinDescription(string strLocalSkinFileName)
 {
 	static char sTemp[1024];
 
 	CString strSkinName(Filename_WithoutPath(Filename_WithoutExt(strLocalSkinFileName.c_str())));
-
 	strSkinName.MakeLower();
+
+	// For part-based skins (head_, torso_, lower_), keep the full name
+	if (!_strnicmp(strSkinName, "head_", 5) ||
+		!_strnicmp(strSkinName, "torso_", 6) ||
+		!_strnicmp(strSkinName, "lower_", 6))
+	{
+		sprintf(sTemp, "%s", (LPCSTR)strSkinName);
+		return sTemp;
+	}
+
+	// For model_* skins, strip the model name prefix
 	int iLoc = strSkinName.Find('_');
 	if (iLoc != -1)
 	{
 		strSkinName = strSkinName.Mid(iLoc+1);
 	}
 
-	sprintf(sTemp,strSkinName);
+	sprintf(sTemp, "%s", (LPCSTR)strSkinName);
 	return sTemp;
 }
 
@@ -127,19 +138,18 @@ static bool OldSkins_Read(LPCSTR psLocalFilename_GLM)
 
 	if (psSkinsPath)
 	{
-		CString strSkinFileMustContainThisName( Filename_WithoutPath( Filename_WithoutExt( psLocalFilename_GLM )) );	
-				strSkinFileMustContainThisName += "_";	// eg: "turret_canon_"
+		CString strModelPrefix( Filename_WithoutPath( Filename_WithoutExt( psLocalFilename_GLM )) );
+				strModelPrefix += "_";	// eg: "model_"
 		char **ppsSkinFiles;
 		int iSkinFiles;
 
 		// scan for skin files...
 		//
-		ppsSkinFiles =	//ri.FS_ListFiles( "shaders", ".shader", &iSkinFiles );
-						Sys_ListFiles(	psSkinsPath,// const char *directory, 
-										".skin",	// const char *extension, 
-										NULL,		// char *filter, 
-										&iSkinFiles,// int *numfiles, 
-										qfalse		// qboolean wantsubs 
+		ppsSkinFiles =	Sys_ListFiles(	psSkinsPath,// const char *directory,
+										".skin",	// const char *extension,
+										NULL,		// char *filter,
+										&iSkinFiles,// int *numfiles,
+										qfalse		// qboolean wantsubs
 										);
 
 		if ( !ppsSkinFiles || !iSkinFiles )
@@ -147,7 +157,7 @@ static bool OldSkins_Read(LPCSTR psLocalFilename_GLM)
 			return false;
 		}
 
-		if ( iSkinFiles > MAX_SKIN_FILES ) 
+		if ( iSkinFiles > MAX_SKIN_FILES )
 		{
 			WarningBox(va("%d skin files found, capping to %d\n\n(tell me if this ever happens -Ste)", iSkinFiles, MAX_SKIN_FILES ));
 
@@ -166,8 +176,12 @@ static bool OldSkins_Read(LPCSTR psLocalFilename_GLM)
 
 			string strLocalSkinFileName(ppsSkinFiles[i]);
 
-			// only look at skins that begin "modelname_skinvariation" for a given "modelname_"
-			if (!_strnicmp(strSkinFileMustContainThisName,strLocalSkinFileName.c_str(),strlen(strSkinFileMustContainThisName)))
+			// Accept skins matching "modelname_*" or JKA part-based skins "head_*", "torso_*", "lower_*"
+			bool bAccept = !_strnicmp(strModelPrefix, strLocalSkinFileName.c_str(), strlen(strModelPrefix))
+						|| !_strnicmp("head_", strLocalSkinFileName.c_str(), 5)
+						|| !_strnicmp("torso_", strLocalSkinFileName.c_str(), 6)
+						|| !_strnicmp("lower_", strLocalSkinFileName.c_str(), 6);
+			if (bAccept)
 			{
 				Com_sprintf( sFileName, sizeof( sFileName ), "%s/%s", Filename_PathOnly(psLocalFilename_GLM), strLocalSkinFileName.c_str() );
 				//ri.Printf( PRINT_ALL, "...loading '%s'\n", sFileName );
@@ -261,20 +275,40 @@ bool OldSkins_Apply( ModelContainer_t *pContainer, LPCSTR psSkinName )
 
 	bool bReturn = true;
 
-	pContainer->strCurrentSkinFile	= psSkinName;
-//	pContainer->strCurrentSkinEthnic= "";
+	// Detect if this is a part-based skin (head_, torso_, lower_) vs a full model skin
+	bool bIsPartSkin = !_strnicmp(psSkinName, "head_", 5)
+					|| !_strnicmp(psSkinName, "torso_", 6)
+					|| !_strnicmp(psSkinName, "lower_", 6);
 
-	pContainer->MaterialBinds.clear();
-	pContainer->MaterialShaders.clear();
+	// Track which skins are applied
+	if (bIsPartSkin) {
+		if (!_strnicmp(psSkinName, "head_", 5))
+			pContainer->strCurrentPartSkin_Head = psSkinName;
+		else if (!_strnicmp(psSkinName, "torso_", 6))
+			pContainer->strCurrentPartSkin_Torso = psSkinName;
+		else if (!_strnicmp(psSkinName, "lower_", 6))
+			pContainer->strCurrentPartSkin_Lower = psSkinName;
+	} else {
+		pContainer->strCurrentSkinFile = psSkinName;
+		// Full skin resets part overrides
+		pContainer->strCurrentPartSkin_Head.clear();
+		pContainer->strCurrentPartSkin_Torso.clear();
+		pContainer->strCurrentPartSkin_Lower.clear();
+	}
 
-	for (int iSurface = 0; iSurface<pContainer->iNumSurfaces; iSurface++)
+	// For full model skins, clear everything. For part skins, overlay on existing state.
+	if (!bIsPartSkin)
 	{
-		// when we're at this point we know it's GLM model, and that the shader name is in fact a material name...
-		//
-		LPCSTR psMaterialName = GLMModel_GetSurfaceShaderName( pContainer->hModel, iSurface );
+		pContainer->MaterialBinds.clear();
+		pContainer->MaterialShaders.clear();
 
-		pContainer->MaterialShaders	[psMaterialName] = "";			// just insert the key for now, so the map<> is legit.
-		pContainer->MaterialBinds	[psMaterialName] = (GLuint) 0;	// default to gl-white-notfound texture
+		for (int iSurface = 0; iSurface<pContainer->iNumSurfaces; iSurface++)
+		{
+			LPCSTR psMaterialName = GLMModel_GetSurfaceShaderName( pContainer->hModel, iSurface );
+
+			pContainer->MaterialShaders	[psMaterialName] = "";
+			pContainer->MaterialBinds	[psMaterialName] = (GLuint) 0;
+		}
 	}
 
 //typedef vector< pair<string,string> > StringPairVector_t;
@@ -306,16 +340,29 @@ bool OldSkins_Apply( ModelContainer_t *pContainer, LPCSTR psSkinName )
 //
 //				pContainer->MaterialBinds[psMaterialName] = uiBind;
 //			}
-			if ( strcmp(psShaderName, "*off") == 0 ) 
-			{ 
-				pContainer->MaterialBinds[psMaterialName] = (GLuint)-1; 
-			} 
-			else 
-			{ 				 
-				TextureHandle_t hTexture = Texture_Load(psShaderName); 
-				GLuint uiBind = Texture_GetGLBind( hTexture ); 
-				pContainer->MaterialBinds[psMaterialName] = uiBind; 
-			} 
+			if ( strcmp(psShaderName, "*off") == 0 )
+			{
+				pContainer->MaterialBinds[psMaterialName] = (GLuint)-1;
+			}
+			else
+			{
+				TextureHandle_t hTexture = Texture_Load(psShaderName);
+				GLuint uiBind = Texture_GetGLBind( hTexture );
+				pContainer->MaterialBinds[psMaterialName] = uiBind;
+			}
+		}
+
+		// For full model skins, surfaces not mentioned should be treated as *off
+		// (matching game behavior). Part skins leave unmentioned surfaces alone.
+		if (!bIsPartSkin)
+		for (int iSurface = 0; iSurface < pContainer->iNumSurfaces; iSurface++)
+		{
+			LPCSTR psSurfName = GLMModel_GetSurfaceName( pContainer->hModel, iSurface );
+			if (psSurfName && pContainer->MaterialBinds.find(psSurfName) == pContainer->MaterialBinds.end())
+			{
+				pContainer->MaterialBinds[psSurfName] = (GLuint)-1;
+				pContainer->MaterialShaders[psSurfName] = "*off";
+			}
 		}
 	}
 

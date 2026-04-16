@@ -896,7 +896,7 @@ static LPCSTR GLMModel_Info( ModelHandle_t hModel )
 			bool bFound = false;
 
 			LPCSTR	psShaderName		= GLMModel_GetUniqueShader( iUniqueShader );
-			LPCSTR	psLocalTexturePath	= R_FindShader( psShaderName );
+			LPCSTR	psLocalTexturePath	= R_FindShaderTextureName( psShaderName );
 		
 			if (psLocalTexturePath && strlen(psLocalTexturePath))
 			{

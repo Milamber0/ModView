@@ -42,6 +42,7 @@ void Skins_ApplyDefault	(ModelContainer_t *pContainer);
 bool Skins_FileHasSurfacePrefs(ModelContainer_t *pContainer, LPCSTR psSkin);
 void Skins_KillPreCacheInfo(void);
 GLuint AnySkin_GetGLBind( ModelHandle_t hModel, LPCSTR psMaterialName, LPCSTR psSurfaceName );
+LPCSTR AnySkin_GetShaderName( ModelHandle_t hModel, LPCSTR psMaterialName, LPCSTR psSurfaceName );
 
 
 #endif	// #ifndef SKINS_H

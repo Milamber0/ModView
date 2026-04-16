@@ -589,7 +589,7 @@ static void Skins_ApplyVariant(ModelContainer_t *pContainer, SkinSet_t::iterator
 
 		pContainer->MaterialShaders[strMaterialName] = psShaderName;
 
-		LPCSTR psLocalTexturePath = R_FindShader( psShaderName );		// shader->texture name
+		LPCSTR psLocalTexturePath = R_FindShaderTextureName( psShaderName );		// shader->texture name
 
 		if (psLocalTexturePath && strlen(psLocalTexturePath))
 		{
@@ -1120,6 +1120,28 @@ GLuint AnySkin_GetGLBind( ModelHandle_t hModel, LPCSTR psMaterialName, LPCSTR ps
 	}
 
 	return (GLuint) 0;
+}
+
+// Returns the shader/texture name from the skin system for a given surface.
+// Used by the renderer to look up .shader definitions via R_FindShader.
+LPCSTR AnySkin_GetShaderName( ModelHandle_t hModel, LPCSTR psMaterialName, LPCSTR psSurfaceName )
+{
+	ModelContainer_t *pContainer = gpContainerBeingRendered;
+
+	if (pContainer == NULL)
+		pContainer = ModelContainer_FindFromModelHandle(hModel);
+
+	if (pContainer)
+	{
+		// Try the material name first (new skin system), then surface name (old skin system)
+		LPCSTR psKey = (pContainer->SkinSets.size()) ? psMaterialName : psSurfaceName;
+
+		MappedString_t::iterator it = pContainer->MaterialShaders.find(psKey);
+		if (it != pContainer->MaterialShaders.end() && !(*it).second.empty())
+			return (*it).second.c_str();
+	}
+
+	return NULL;
 }
 
 /////////////////// eof /////////////////
