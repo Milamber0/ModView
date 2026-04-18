@@ -71,6 +71,15 @@ static map<string, EfxEffectDef*>						g_EffectCache;
 static map<ModelContainer_t*, vector<EfxLiveParticle> >	g_ParticlesByContainer;
 static DWORD											g_dwLastUpdateMs = 0;
 
+// Diagnostics visible without a debugger. Incremented each time an event
+// actually dispatches a spawn (bolt resolved, effect loaded). Reset on
+// Efx_Shutdown.
+int		g_iEfxEventsFired    = 0;		// total events ever triggered this session
+int		g_iEfxParticlesLive  = 0;		// refreshed each frame by Efx_TickAll
+int		g_iEfxParticlesTotal = 0;		// total particles ever spawned (never resets except on shutdown)
+char	g_sEfxLastEffect[256] = {0};	// last effect path that successfully spawned
+char	g_sEfxLastBolt[64]    = {0};	// last bolt name that successfully resolved
+
 // =============================================================================
 // Small helpers
 // =============================================================================
@@ -133,15 +142,21 @@ static void efx_skipBracedBlock(char **text)
 
 // Read a { start N ...; end N ... } block into *outStartMin/Max, *outEndMin/Max.
 // Accepts N floats per entry; floats after the first on a line widen the range.
-// Returns cursor at the matched '}'.
+// When `bMirrorIfOneSided` is true and only one of start/end appears in the
+// file, the missing side is cloned from the one that was present. Size and
+// RGB want this ("constant size 10" from `start 10`). Alpha wants the
+// default behaviour, where an unspecified side keeps the caller-set default
+// (so `end 0` produces a fade from 1.0 to 0). Returns at the matched '}'.
 static void efx_parseInterpolatedBlock(char **text,
 									   float *outStartMin, float *outStartMax,
 									   float *outEndMin,   float *outEndMax,
-									   int count)
+									   int count,
+									   bool bMirrorIfOneSided)
 {
 	char *tok = COM_ParseExt(text, qtrue);
 	if (tok[0] != '{') return;
 
+	bool bSawStart = false, bSawEnd = false;
 	int d = 1;
 	while (d > 0) {
 		tok = COM_ParseExt(text, qtrue);
@@ -153,13 +168,23 @@ static void efx_parseInterpolatedBlock(char **text,
 			float v[8]; int n = efx_parseFloats(text, v, count * 2);
 			if (n >= count) for (int i = 0; i < count; i++) outStartMin[i] = v[i];
 			if (n >= count) for (int i = 0; i < count; i++) outStartMax[i] = (n >= count*2) ? v[count + i] : v[i];
+			bSawStart = true;
 		}
 		else if (!Q__stricmp(tok, "end")) {
 			float v[8]; int n = efx_parseFloats(text, v, count * 2);
 			if (n >= count) for (int i = 0; i < count; i++) outEndMin[i] = v[i];
 			if (n >= count) for (int i = 0; i < count; i++) outEndMax[i] = (n >= count*2) ? v[count + i] : v[i];
+			bSawEnd = true;
 		}
 		// "flags" and other sub-keywords ignored for MVP
+	}
+
+	if (bMirrorIfOneSided) {
+		if (bSawStart && !bSawEnd) {
+			for (int i = 0; i < count; i++) { outEndMin[i] = outStartMin[i]; outEndMax[i] = outStartMax[i]; }
+		} else if (bSawEnd && !bSawStart) {
+			for (int i = 0; i < count; i++) { outStartMin[i] = outEndMin[i]; outStartMax[i] = outEndMax[i]; }
+		}
 	}
 }
 
@@ -232,20 +257,23 @@ static bool efx_parseParticle(char **text, EfxParticleDef *out)
 		}
 		else if (!Q__stricmp(tok, "size")) {
 			efx_parseInterpolatedBlock(text, sizeStartMin, sizeStartMax,
-								   sizeEndMin, sizeEndMax, 1);
+								   sizeEndMin, sizeEndMax, 1, true);	// mirror: `start 10` = constant 10
 			out->fSizeStartMin = sizeStartMin[0]; out->fSizeStartMax = sizeStartMax[0];
 			out->fSizeEndMin   = sizeEndMin[0];   out->fSizeEndMax   = sizeEndMax[0];
 		}
 		else if (!Q__stricmp(tok, "alpha")) {
+			// Defaults preserved: alpha defaults to 1 -> 0 fade, so an
+			// unspecified side keeps the default instead of cloning.
+			alphaStartMin[0] = 1.0f;
+			alphaEndMin[0]   = 0.0f;
 			efx_parseInterpolatedBlock(text, alphaStartMin, alphaStartMax,
-								   alphaEndMin, alphaEndMax, 1);
-			// single alpha curve, collapse to start/end (ignore min/max range)
+								   alphaEndMin, alphaEndMax, 1, false);
 			out->fAlphaStart = alphaStartMin[0];
 			out->fAlphaEnd   = alphaEndMin[0];
 		}
 		else if (!Q__stricmp(tok, "rgb")) {
 			efx_parseInterpolatedBlock(text, rgbStartMin, rgbStartMax,
-								   rgbEndMin, rgbEndMax, 3);
+								   rgbEndMin, rgbEndMax, 3, true);		// mirror: `start R G B` = constant colour
 			for (int i = 0; i < 3; i++) { out->vRgbStart[i] = rgbStartMin[i]; out->vRgbEnd[i] = rgbEndMin[i]; }
 		}
 		else if (!Q__stricmp(tok, "shader") || !Q__stricmp(tok, "shaders")) {
@@ -293,11 +321,22 @@ static EfxEffectDef *efx_loadFromDisk(const char *psEffectPathNoExt)
 {
 	extern char gamedir[];
 	char sFullPath[1024];
-	_snprintf(sFullPath, sizeof(sFullPath), "%s%s.efx", gamedir, psEffectPathNoExt);
+
+	// Effect paths in animevents.cfg are relative to the `effects/` folder,
+	// not to gamedir. Only prepend if the caller didn't include it already.
+	const char *prefix = "effects/";
+	if (_strnicmp(psEffectPathNoExt, "effects/", 8) == 0 ||
+		_strnicmp(psEffectPathNoExt, "effects\\", 8) == 0) {
+		prefix = "";
+	}
+	_snprintf(sFullPath, sizeof(sFullPath), "%s%s%s.efx", gamedir, prefix, psEffectPathNoExt);
 	sFullPath[sizeof(sFullPath) - 1] = 0;
 
 	FILE *f = fopen(sFullPath, "rb");
-	if (!f) return NULL;
+	if (!f) {
+		OutputDebugString(va("EFX: could not open '%s'\n", sFullPath));
+		return NULL;
+	}
 
 	fseek(f, 0, SEEK_END);
 	long len = ftell(f);
@@ -413,6 +452,7 @@ static void efx_spawnBurst(ModelContainer_t *pContainer, const char *psEffectPat
 			lp.uiTexBind = pd.uiTexBind;
 
 			list.push_back(lp);
+			g_iEfxParticlesTotal++;
 		}
 	}
 }
@@ -444,7 +484,11 @@ void Efx_DispatchFrameEvents(ModelContainer_t *pContainer, int iCurrentFrame)
 			iBolt = Model_GetBoltIndex(pContainer->hModel, ev.sBoltName, true, true);
 			bIsBone = true;
 		}
-		if (iBolt == -1) continue;	// unresolvable bolt - silent skip
+		if (iBolt == -1) {
+			OutputDebugString(va("EFX: frame %d event '%s' - bolt '%s' not found on model\n",
+								 iCurrentFrame, ev.sEffectPath, ev.sBoltName));
+			continue;
+		}
 
 		// Pull the transformed matrix for this bolt, already in model-local
 		// space, populated during the most recent render pass.
@@ -456,10 +500,24 @@ void Efx_DispatchFrameEvents(ModelContainer_t *pContainer, int iCurrentFrame)
 			if (iBolt >= 0 && iBolt < MAX_G2_SURFACES && pContainer->XFormedG2TagSurfsValid[iBolt])
 				pMat = &pContainer->XFormedG2TagSurfs[iBolt];
 		}
-		if (!pMat) continue;
+		if (!pMat) {
+			OutputDebugString(va("EFX: frame %d event '%s' - bolt '%s' matrix not valid yet\n",
+								 iCurrentFrame, ev.sEffectPath, ev.sBoltName));
+			continue;
+		}
 
 		float vOrigin[3] = { pMat->matrix[0][3], pMat->matrix[1][3], pMat->matrix[2][3] };
 		efx_spawnBurst(pContainer, ev.sEffectPath, vOrigin);
+
+		g_iEfxEventsFired++;
+		strncpy(g_sEfxLastEffect, ev.sEffectPath, sizeof(g_sEfxLastEffect) - 1);
+		g_sEfxLastEffect[sizeof(g_sEfxLastEffect) - 1] = 0;
+		strncpy(g_sEfxLastBolt, ev.sBoltName, sizeof(g_sEfxLastBolt) - 1);
+		g_sEfxLastBolt[sizeof(g_sEfxLastBolt) - 1] = 0;
+
+		OutputDebugString(va("EFX fired: %s on %s @ frame %d (origin=%.1f,%.1f,%.1f)\n",
+							 ev.sEffectPath, ev.sBoltName, iCurrentFrame,
+							 vOrigin[0], vOrigin[1], vOrigin[2]));
 	}
 }
 
@@ -479,6 +537,7 @@ void Efx_TickAll(void)
 	g_dwLastUpdateMs = now;
 	if (dt <= 0.0f) return;
 
+	int totalLive = 0;
 	for (map<ModelContainer_t*, vector<EfxLiveParticle> >::iterator it = g_ParticlesByContainer.begin();
 		 it != g_ParticlesByContainer.end(); ++it) {
 		vector<EfxLiveParticle> &list = it->second;
@@ -492,7 +551,9 @@ void Efx_TickAll(void)
 			for (int k = 0; k < 3; k++) lp.vPos[k] += lp.vVel[k] * dt;
 			lp.vVel[2] -= lp.fGravity * dt;
 		}
+		totalLive += (int)list.size();
 	}
+	g_iEfxParticlesLive = totalLive;
 }
 
 // =============================================================================
@@ -581,6 +642,11 @@ void Efx_Shutdown(void)
 	g_EffectCache.clear();
 	g_ParticlesByContainer.clear();
 	g_dwLastUpdateMs = 0;
+	g_iEfxEventsFired    = 0;
+	g_iEfxParticlesLive  = 0;
+	g_iEfxParticlesTotal = 0;
+	g_sEfxLastEffect[0]  = 0;
+	g_sEfxLastBolt[0]    = 0;
 }
 
 ///////////////// eof /////////////

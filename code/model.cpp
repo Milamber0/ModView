@@ -3614,6 +3614,25 @@ static void ModelDraw_InfoText_Totals(void)
 		AppVars.bAtleast1VertWeightDisplayed = false;
 	}
 
+	// EFX diagnostics - always visible when an effect has ever fired this
+	// session. Shows live + total particle counts so even short-lived bursts
+	// leave evidence (live will be 0 afterwards but total stays), plus the
+	// last effect/bolt that actually dispatched.
+	{
+		extern int  g_iEfxEventsFired;
+		extern int  g_iEfxParticlesLive;
+		extern int  g_iEfxParticlesTotal;
+		extern char g_sEfxLastEffect[];
+		extern char g_sEfxLastBolt[];
+		if (g_iEfxEventsFired > 0 || g_iEfxParticlesLive > 0) {
+			int y = g_iScreenHeight - TEXT_DEPTH * 2;
+			Text_DisplayFlat(va("EFX: %d fired, %d live / %d total   last: %s @ %s",
+								g_iEfxEventsFired, g_iEfxParticlesLive, g_iEfxParticlesTotal,
+								g_sEfxLastEffect[0] ? g_sEfxLastEffect : "(none)",
+								g_sEfxLastBolt[0]   ? g_sEfxLastBolt   : ""),
+							 TEXT_WIDTH, y, 0, 255, 255, false);	// cyan
+		}
+	}
 
 /*
 	// temp general test...

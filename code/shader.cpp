@@ -512,7 +512,12 @@ static void ParseTexMod( char *text, shaderStage_t *stage )
 static GLuint LoadShaderTexture( const char *name )
 {
 	if ( !name || !name[0] ) return 0;
-	if ( name[0] == '$' ) return 0; // special textures like $lightmap
+	if ( name[0] == '$' ) return 0;		// special textures like $lightmap, $whiteimage
+	if ( name[0] == '*' ) return 0;		// built-in shader refs like *white, *off, *default
+
+	// [NoMaterial] is Ghoul2's marker for a surface with no material assigned
+	// (tag surfaces, caps). It's never a real file - don't warn about it.
+	if ( !Q__stricmp(name, "[NoMaterial]") ) return 0;
 
 	int handle = Texture_LoadDirect( name );
 	GLuint bind = (handle > 0) ? Texture_GetGLBind( handle ) : 0;
