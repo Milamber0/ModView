@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ModView VERSION 2.1 LANGUAGES C CXX)
+project(ModView VERSION 3.0 LANGUAGES C CXX)
 
 # Windows-only MFC application
 if(NOT WIN32)

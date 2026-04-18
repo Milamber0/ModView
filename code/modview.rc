@@ -25,18 +25,18 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 // TEXTINCLUDE
 //
 
-1 TEXTINCLUDE 
+1 TEXTINCLUDE
 BEGIN
     "resource.h\0"
 END
 
-2 TEXTINCLUDE 
+2 TEXTINCLUDE
 BEGIN
     "#include ""afxres.h""\r\n"
     "\0"
 END
 
-3 TEXTINCLUDE 
+3 TEXTINCLUDE
 BEGIN
     "#define _AFX_NO_SPLITTER_RESOURCES\r\n"
     "#define _AFX_NO_OLE_RESOURCES\r\n"
@@ -525,16 +525,16 @@ END
 // Dialog
 //
 
-IDD_ABOUTBOX DIALOGEX 0, 0, 235, 110
+IDD_ABOUTBOX DIALOGEX 0, 0, 340, 110
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "About ModView"
+CAPTION "About ModView 3"
 FONT 8, "MS Sans Serif", 0, 0, 0x0
 BEGIN
     ICON            IDR_MAINFRAME,IDC_STATIC,11,17,20,20
-    LTEXT           "ModView Version 2.1",IDC_STATIC,41,10,119,8,SS_NOPREFIX
+    LTEXT           "ModView Version 3.0",IDC_STATIC,41,10,119,8,SS_NOPREFIX
     LTEXT           "Copyright (C) 2000 .. 2002 Raven Software",IDC_STATIC,41,41,187,8
-    DEFPUSHBUTTON   "OK",IDOK,93,82,50,14,WS_GROUP
-    LTEXT           "Written by Ste Cork (+ MFC help from Mike Crowns)",IDC_STATIC,41,25,162,8
+    DEFPUSHBUTTON   "OK",IDOK,145,82,50,14,WS_GROUP
+    LTEXT           "3.0 Created by Milamber. Originally Written by Ste Cork (+ MFC help from Mike Crowns)",IDC_STATIC,41,25,290,8
     LTEXT           "Current formats supported:            Ghoul2  ( .GLM / .GLA )",IDC_STATIC,41,54,183,8
 END
 
@@ -622,10 +622,10 @@ BEGIN
         BEGIN
             VALUE "FileDescription", "ModView MFC Application"
             VALUE "FileVersion", "1, 0, 0, 1"
-            VALUE "InternalName", "ModView"
+            VALUE "InternalName", "ModView 3"
             VALUE "LegalCopyright", "Copyright (C) 2000"
             VALUE "OriginalFilename", "ModView.EXE"
-            VALUE "ProductName", "ModView Application"
+            VALUE "ProductName", "ModView 3 Application"
             VALUE "ProductVersion", "1, 0, 0, 1"
         END
     END
@@ -647,7 +647,7 @@ BEGIN
     IDD_ABOUTBOX, DIALOG
     BEGIN
         LEFTMARGIN, 7
-        RIGHTMARGIN, 228
+        RIGHTMARGIN, 333
         TOPMARGIN, 7
         BOTTOMMARGIN, 103
     END
@@ -689,12 +689,12 @@ END
 
 STRINGTABLE
 BEGIN
-    IDR_MAINFRAME           "ModView\n\nModVie\n\n\nModView.Document\nModVie Document"
+    IDR_MAINFRAME           "ModView 3\n\nModVie\n\n\nModView.Document\nModVie Document"
 END
 
 STRINGTABLE
 BEGIN
-    AFX_IDS_APP_TITLE       "ModView"
+    AFX_IDS_APP_TITLE       "ModView 3"
     AFX_IDS_IDLEMESSAGE     "Ready"
 END
 
@@ -835,7 +835,7 @@ STRINGTABLE
 BEGIN
     ID_VIEW_BILINEAR        "Toggles texture smoothing"
     ID_VIEW_SCREENSHOT_FILE "Takes a screenshot and saves out (removes onscreen text first)"
-    ID_VIEW_SCREENSHOT_CLIPBOARD 
+    ID_VIEW_SCREENSHOT_CLIPBOARD
                             "Takes a screenshot and sends to clipboard (removes text first)"
     ID_VIEW_ORIGIN          "Draw axis/origin lines"
     ID_VIEW_GLINFO          "View whatever the GL driver sends back when interrogated"
@@ -877,11 +877,11 @@ BEGIN
     ID_EDIT_TESTFUNCTION    "Used for temp testing of weird bits of code, only works on my machine"
     IDM_TREE_MODEL_UNBOLTME "Will delete this model and any bolted models from its parent model"
     ID_FILE_RESETVIEWPARAMS "Reset view position to default ( useful for when model is scrolled offscreen )\nReset viewpos"
-    ID_ANIMATION_STARTWITHWRAPFORCE 
+    ID_ANIMATION_STARTWITHWRAPFORCE
                             "Start animating, with forced-wrap for non-wrapping sequences\nPlay ( with wrap-force )"
     ID_FILE_WRITESCRIPT     "Writes out a script file so you can reload all current models in same way later"
     ID_FILE_READSCRIPT      "Reads in a script file detailing which models are bolted to which etc."
-    ID_VIEW_SURFACEHILITEWITHBONEREFS 
+    ID_VIEW_SURFACEHILITEWITHBONEREFS
                             "Only applicable if surface highlighting is on"
     ID_VIEW_TAGSURFACES     "View the surfaces used for bolting which are normally hidden"
     ID_VIEW_TAGSASRGB       "Check this to view Red/Green/Blue axis lines, else will show +ve and -ve letters on axis"
@@ -891,16 +891,16 @@ STRINGTABLE
 BEGIN
     IDM_GLMTAGSURFACE_INFO  "General info on this tag surface"
     IDM_GLMTAGSURFACE_BOLT  "Open a browse dialog to bolt a model to this surface ( deleting any others already there )"
-    IDM_GLMTAGSURFACE_DELETEBOLT 
+    IDM_GLMTAGSURFACE_DELETEBOLT
                             "Delete whatever models are bolted to this tag surface"
-    IDR_TREE_SURFACES_ALLDEFAULTOFF_ON 
+    IDR_TREE_SURFACES_ALLDEFAULTOFF_ON
                             "Switches on all surfaces ending in ""_off"" (which normally default to not being drawn)"
-    IDR_TREE_SURFACES_ALLDEFAULTOFF_OFF 
+    IDR_TREE_SURFACES_ALLDEFAULTOFF_OFF
                             "Switches off all surfaces ending in ""_off"" (which normally default to not being drawn)"
     IDM_SURFACE_BOLT        "Open a browse window to bolt another model to this bolt point, deleting anything already bolted there"
-    ID_SURFACE_DELETEMODELBOLTEDTOTHISTAGSURFACE 
+    ID_SURFACE_DELETEMODELBOLTEDTOTHISTAGSURFACE
                             "Delete whatever model is bolted to this tag surface"
-    ID_SURFACE_DELETEMODELBOLTEDTOTHISSURFACE 
+    ID_SURFACE_DELETEMODELBOLTEDTOTHISSURFACE
                             "Delete all models bolted to this tag surface"
 END
 
@@ -912,11 +912,11 @@ BEGIN
     ID_EXPAND_ALL           "Expand everything below this"
     ID_SKIN_EXPANDALL       "Expand all tree items below this one"
     ID_VIEW_FORCEWHITE      "This option forces all textures to be drawn as solid white, which will show up cracks better"
-    ID_VIEW_SCREENSHOT_CLEAN 
+    ID_VIEW_SCREENSHOT_CLEAN
                             "This gets rid of all higlights, text, etc so screenshots come out clean, with justa Raven (C) notice"
     ID_OLDSKIN_VALIDATE     "Check that all the files for this skin exist"
     ID_OLDSKIN_APPLY        "Well, duh....  read the menu"
-    IDM_GLM_BONE_LOWERANIMSTART 
+    IDM_GLM_BONE_LOWERANIMSTART
                             "Set this bone as being the (non-inclusive) stop point of the primary animation"
     ID_VIEW_VERTWEIGHTING   "Turning this on shows the number of bones each vert references (for optimisation)"
     ID_SEQ_LOCK_SECONDARY   "Lock this sequence as secondary animation"
@@ -930,13 +930,13 @@ BEGIN
     ID_SURFACES_FIND        "Search from this point down for item matching <inputstring>"
     ID_BONES_FIND           "Recursive-search for the supplied bone name"
     ID_MODEL_FINDANY        "Generic tree search to find deeply-nested items"
-    ID_SEQUENCES_VIEWFULLPATH 
+    ID_SEQUENCES_VIEWFULLPATH
                             "Toggles displaying of local-paths in sequence names"
-    ID_ETHNIC_APPLYWITHSURFACES 
+    ID_ETHNIC_APPLYWITHSURFACES
                             "Apply skin, but also apply the surface on/off hints in the G2Skin file"
-    IDR_TREE_SURFACES_ALLDEFAULTOFF_DEFAULT 
+    IDR_TREE_SURFACES_ALLDEFAULTOFF_DEFAULT
                             "Restores all of a model's surfaces to what they would be when first loaded"
-    ID_ETHNIC_APPLYWITHSURFACEDEFAULTING 
+    ID_ETHNIC_APPLYWITHSURFACEDEFAULTING
                             "Default's all model's surfaces to the correct on/off state, then applies the skin"
     ID_VIEW_BBOX            "View bounding box. Takes more CPU time and ignores lerping"
     ID_VIEW_FLOOR           "Shows a floor under the primary model"
@@ -947,39 +947,39 @@ END
 STRINGTABLE
 BEGIN
     ID_SEQ_MULTILOCK        "Add this sequence to this model's multi-sequence locking list"
-    ID_SEQ_MULTILOCK_SECONDARY 
+    ID_SEQ_MULTILOCK_SECONDARY
                             "Add this sequence to this model's secondary multi-lock list"
     ID_MULTISEQS_UNLOCK_PRIMARY "Toggle primary multisequence locking"
     ID_MULTISEQS_UNLOCK_SECONDARY "Toggle secondary multi-sequence locking"
-    ID_SEQS_DELETEALL_PRIMARY 
+    ID_SEQS_DELETEALL_PRIMARY
                             "Deletes all sequence entries in the primary multi-lock list"
-    ID_SEQS_DELETEALL_SECONDARY 
+    ID_SEQS_DELETEALL_SECONDARY
                             "Deletes all sequences in the secondary multi-lock list"
-    ID_SEQS_DELETELAST_PRIMARY 
+    ID_SEQS_DELETELAST_PRIMARY
                             "Basic edit feature, just deletes last entry in list"
-    ID_SEQS_DELETELAST_SECONDARY 
+    ID_SEQS_DELETELAST_SECONDARY
                             "Basic edit feature, just deletes last entry in list"
     ID_SEQ_MULTILOCK_DELETE "Deletes this sequence from the multilock list"
-    ID_SEQ_MULTILOCK_SECONDARY_DELETE 
+    ID_SEQ_MULTILOCK_SECONDARY_DELETE
                             "Removes this sequence from secondary multi-lock list"
     ID_VIEW_BONEFILTERING   "Filters out bone weights below a given threshold"
-    ID_EDIT_SETBONEWEIGHT_THRESHHOLD 
+    ID_EDIT_SETBONEWEIGHT_THRESHHOLD
                             "Input a value below which bone-weightings will be ignored"
     ID_VIEW_CRACKVIEWER     "Speculative code to auto-highlight model cracks"
 END
 
 STRINGTABLE
 BEGIN
-    IDM_GLMSURFACE_SETASROOT 
+    IDM_GLMSURFACE_SETASROOT
                             "Forces model to start rendering from this surface down, not from actual root"
-    IDR_TREE_SURFACES_CLEARROOT 
+    IDR_TREE_SURFACES_CLEARROOT
                             "Removes any root override so model renders from surface 0 again"
-    ID_VIEW_UNSHADOWABLESURFACES 
+    ID_VIEW_UNSHADOWABLESURFACES
                             "Show a marker on any surface that has too many ( > MAX_SHADER_VERTS/2) verts to display with shadows ingame"
     ID_FILE_VIEW_SOF2_NPCS  "Generates a list of NPCs to view from SOF2's multiple-file data format"
-    IDM_EDIT_ALLOWSKELETONOVERRIDES 
+    IDM_EDIT_ALLOWSKELETONOVERRIDES
                             "( Allows override-use of different skeletons for Ghoul2 models )"
-    ID_VIEW_DOUBLESIDEDPOLYS 
+    ID_VIEW_DOUBLESIDEDPOLYS
                             "Show all polys as double-sided (except in wireframe)"
 END
 
