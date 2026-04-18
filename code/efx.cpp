@@ -300,14 +300,16 @@ static bool efx_parseParticle(char **text, EfxParticleDef *out)
 		// attached to sub-keywords are rare in Particle primitives.
 	}
 
-	// Resolve shader texture immediately and tap into the existing missing-
-	// texture reporter so any gaps surface in the standard warning dialog.
+	// Resolve shader texture immediately. Missing EFX textures are common
+	// (effects live in per-mod pk3s and often aren't extracted) and firing
+	// the shader-texture warning dialog mid-animation is jarring. Log to
+	// OutputDebugString instead so the info is available under a debugger
+	// but doesn't block the user.
 	if (out->sShader[0]) {
 		int h = Texture_LoadDirect(out->sShader);
 		if (h > 0) out->uiTexBind = Texture_GetGLBind(h);
 		if (!out->uiTexBind) {
-			extern void ReportMissingShaderTexture(const char *name);
-			ReportMissingShaderTexture(out->sShader);
+			OutputDebugString(va("EFX: missing particle texture '%s'\n", out->sShader));
 		}
 	}
 	return true;
