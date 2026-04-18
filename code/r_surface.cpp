@@ -1953,6 +1953,15 @@ void RE_RenderGlowPass( void )
 
 	Glow_EnsureTextures(screenW, screenH);
 
+	// The glow pass is a screen-space post-process built out of fullscreen
+	// GL_QUADS (scene restore, downsample, multi-pass blur, final composite).
+	// Wireframe mode leaves glPolygonMode set to GL_LINE, which would draw
+	// every one of those quads as 4 edge lines and leave the framebuffer
+	// black. Force GL_FILL for the whole pass and restore on exit.
+	GLint savedPolyMode[2] = { GL_FILL, GL_FILL };
+	glGetIntegerv(GL_POLYGON_MODE, savedPolyMode);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
 	float maxS = (float)screenW / (float)g_glowTexWidth;
 	float maxT = (float)screenH / (float)g_glowTexHeight;
 
@@ -1982,6 +1991,9 @@ void RE_RenderGlowPass( void )
 		glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
 		glPopMatrix(); glMatrixMode(GL_PROJECTION); glPopMatrix();
 		glEnableClientState(GL_VERTEX_ARRAY);
+		// Restore polygon mode before returning
+		glPolygonMode(GL_FRONT, savedPolyMode[0]);
+		glPolygonMode(GL_BACK, savedPolyMode[1]);
 		return;
 	}
 
@@ -2134,6 +2146,10 @@ void RE_RenderGlowPass( void )
 	glPopMatrix();
 
 	glEnableClientState(GL_VERTEX_ARRAY);
+
+	// Restore polygon mode (was FILL during glow pass; may have been LINE before).
+	glPolygonMode(GL_FRONT, savedPolyMode[0]);
+	glPolygonMode(GL_BACK, savedPolyMode[1]);
 }
 
 
