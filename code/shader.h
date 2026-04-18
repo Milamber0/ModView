@@ -14,6 +14,7 @@
 
 void ScanAndLoadShaderFiles( void );
 void KillAllShaderFiles(void);
+void ShowMissingShaderTextureWarningIfAny(void);
 
 // =============================================================================
 // GL state bits (used in shaderStage_t::stateBits)

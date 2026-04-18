@@ -3716,6 +3716,11 @@ void ModelList_Render(int iWindowWidth, int iWindowHeight)
 	gbInRenderer = true;
 		ModelList_Render_Actual(iWindowWidth, iWindowHeight);
 	gbInRenderer = false;
+
+	// Shader stages lazy-load their textures during rendering. Any texture
+	// that couldn't be opened is now reported here, once per batch, outside
+	// the renderer so it's safe to pop a modal dialog.
+	ShowMissingShaderTextureWarningIfAny();
 }
 
 

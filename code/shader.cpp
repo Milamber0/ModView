@@ -246,11 +246,69 @@ static char *FindShaderInShaderText( const char *shadername ) {
 typedef map<string,string>	ShadersFoundAndFilesPicked_t;
 							ShadersFoundAndFilesPicked_t ShadersFoundAndFilesPicked;
 
+// Missing-texture tracking. Shader stages that reference textures not on
+// disk used to fail silently, leaving models looking like the wrong skin.
+// We now collect the misses (deduped) and pop a single WarningBox at the
+// end of the render frame - matches the existing "missing shader" report
+// pattern in oldskins.cpp.
+static set<string>	g_reportedMissingTextures;
+static bool			g_bMissingTextureListDirty = false;
+
+void ReportMissingShaderTexture(const char *name)
+{
+	if (!name || !name[0]) return;
+
+	string key = name;
+	if (g_reportedMissingTextures.count(key)) return;
+	g_reportedMissingTextures.insert(key);
+	g_bMissingTextureListDirty = true;
+
+	char buf[1024];
+	_snprintf(buf, sizeof(buf), "ModView shader: missing texture '%s'\n", name);
+	buf[sizeof(buf) - 1] = 0;
+	OutputDebugString(buf);
+}
+
+// Called from ModelList_Render after gbInRenderer goes false, so it's safe
+// to pop a modal dialog (never inside a paint/render callback).
+void ShowMissingShaderTextureWarningIfAny(void)
+{
+	if (!g_bMissingTextureListDirty) return;
+	g_bMissingTextureListDirty = false;
+
+	string sList;
+	for (set<string>::iterator it = g_reportedMissingTextures.begin();
+		 it != g_reportedMissingTextures.end(); ++it) {
+		sList += *it;
+		sList += "\n";
+	}
+	int lineCount = (int)g_reportedMissingTextures.size();
+
+	#define MAX_BOX_LINES_HERE 50
+	if (lineCount > MAX_BOX_LINES_HERE) {
+		if (GetYesNo(va("Some shader textures couldn't be loaded (%d missing). "
+						"List has > %d entries, send to Notepad?",
+						lineCount, MAX_BOX_LINES_HERE))) {
+			SendStringToNotepad(va("Missing shader textures:\n\n%s", sList.c_str()),
+								"missing_textures.txt");
+		}
+	} else {
+		WarningBox(va("The following shader textures could not be loaded:\n\n%s",
+					  sList.c_str()));
+	}
+}
+
 void KillAllShaderFiles(void)
 {
 	SAFEFREE(s_shaderText);
 	ShadersFoundAndFilesPicked.clear();
 	R_ShutdownShaders();
+
+	// Reset miss tracking. KillAllShaderFiles fires on gamedir change and on
+	// Ctrl+R refresh, so after a refresh the next render will re-report any
+	// still-missing textures from scratch.
+	g_reportedMissingTextures.clear();
+	g_bMissingTextureListDirty = false;
 }
 
 
@@ -447,13 +505,21 @@ static void ParseTexMod( char *text, shaderStage_t *stage )
 
 // Load a texture by path and return its GL bind. Returns 0 on failure.
 // Uses Texture_LoadDirect to avoid re-entering the shader text parser.
+//
+// Note: Texture_LoadDirect always returns a valid handle (it caches misses
+// so it won't re-attempt the load). The real "did it load" signal is whether
+// gluiBind ended up non-zero, so check that instead of the handle.
 static GLuint LoadShaderTexture( const char *name )
 {
 	if ( !name || !name[0] ) return 0;
 	if ( name[0] == '$' ) return 0; // special textures like $lightmap
 
 	int handle = Texture_LoadDirect( name );
-	return (handle > 0) ? Texture_GetGLBind( handle ) : 0;
+	GLuint bind = (handle > 0) ? Texture_GetGLBind( handle ) : 0;
+	if (bind != 0) return bind;
+
+	ReportMissingShaderTexture( name );
+	return 0;
 }
 
 
