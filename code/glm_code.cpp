@@ -1109,6 +1109,12 @@ static bool GLMModel_ReadSequenceInfo(HTREEITEM hTreeItem_Root, ModelContainer_t
 		Anims_ReadFile_FRAMES(pContainer, psLocalFilename_GLA);
 	}
 
+	// After animation.cfg has populated the SequenceList we can parse
+	// animevents.cfg from the same folder - it references anims by name so
+	// it needs the sequences to resolve absolute frame numbers. Missing file
+	// is fine; most models don't ship events.
+	Anims_ReadFile_ANIMEVENTS_CFG(pContainer, psLocalFilename_GLA);
+
 	// now add to tree if we found something...
 	//
 	if (pContainer->SequenceList.size())

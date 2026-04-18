@@ -65,6 +65,7 @@ set(MODVIEW_SOURCES
     code/wintalk.cpp
     code/GenericParser2.cpp
     code/scene_state.cpp
+    code/efx.cpp
 )
 
 set(MODVIEW_HEADERS
@@ -117,6 +118,7 @@ set(MODVIEW_HEADERS
     code/textures.h
     code/todo.h
     code/wintalk.h
+    code/efx.h
 )
 
 # Embedded library sources (compiled as part of the executable, matching the vcxproj)

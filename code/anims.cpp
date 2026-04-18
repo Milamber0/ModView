@@ -427,3 +427,94 @@ bool Anims_ReadFile_ANIMATION_CFG(ModelContainer_t *pContainer, LPCSTR psLocalFi
 
 	return !!(pContainer->SequenceList.size());
 }
+
+
+// Look up a sequence by animID string (case-insensitive). Returns NULL if
+// not in the container's SequenceList. Used to resolve animevents.cfg lines
+// that reference an animation by name (e.g. BOTH_ATTACK1).
+static const Sequence_t *FindSequenceByName(const ModelContainer_t *pContainer, const char *sName)
+{
+	for (size_t i = 0; i < pContainer->SequenceList.size(); i++)
+	{
+		if (_stricmp(pContainer->SequenceList[i].sName, sName) == 0)
+			return &pContainer->SequenceList[i];
+	}
+	return NULL;
+}
+
+// animevents.cfg lives next to animation.cfg in the .gla's folder. Format is
+// loosely:
+//    UPPEREVENTS { animID AEV_EFFECT frame effectPath boltName chance ... }
+//    LOWEREVENTS { ... }
+// We only care about AEV_EFFECT rows; other event types (AEV_SOUNDCHAN, AEV_FIRE,
+// AEV_MOVE, AEV_FOOTSTEP, etc.) are skipped. UPPEREVENTS/LOWEREVENTS blocks are
+// treated identically for ModView (no upper/lower distinction at playback).
+bool Anims_ReadFile_ANIMEVENTS_CFG(ModelContainer_t *pContainer, LPCSTR psLocalFilename_GLA)
+{
+	LPCSTR psFilename = va("%s%s/animevents.cfg",gamedir,Filename_PathOnly(psLocalFilename_GLA));
+
+	FILE *fHandle = fopen(psFilename,"rt");
+	if (!fHandle) return false;
+
+	char sLine[2048];
+	int  iTotalEvents = 0;
+
+	while (fgets(sLine, sizeof(sLine), fHandle))
+	{
+		// strip comments
+		char *pc = strstr(sLine, "//");
+		if (pc) *pc = 0;
+
+		// trim leading/trailing whitespace and braces
+		CString str(sLine);
+		str.TrimLeft();
+		str.TrimRight();
+		if (str.IsEmpty()) continue;
+
+		// skip section headers and braces
+		if (_strnicmp(str, "UPPEREVENTS", 11) == 0) continue;
+		if (_strnicmp(str, "LOWEREVENTS", 11) == 0) continue;
+		if (str[0] == '{' || str[0] == '}') continue;
+
+		// Tokenise: animID, eventType, frame, <args...>
+		char sAnimID[MAX_QPATH]   = {0};
+		char sEventType[64]       = {0};
+		int  iRelFrame            = 0;
+		// Use a fixed-field sscanf first to grab the common prefix
+		int iScanned = sscanf(str, "%63s %63s %d", sAnimID, sEventType, &iRelFrame);
+		if (iScanned < 3) continue;
+		if (_stricmp(sEventType, "AEV_EFFECT") != 0) continue;	// only handling effects
+
+		// After the frame, skip those three tokens in the line and grab
+		// effectPath + boltName + chance from the remainder.
+		const char *rest = str;
+		for (int skip = 0; skip < 3; skip++)
+		{
+			while (*rest && !isspace((unsigned char)*rest)) rest++;
+			while (*rest && isspace((unsigned char)*rest)) rest++;
+		}
+		char sEffectPath[128] = {0};
+		char sBoltName[64]    = {0};
+		int  iChance          = 0;
+		int iRestScanned = sscanf(rest, "%127s %63s %d", sEffectPath, sBoltName, &iChance);
+		if (iRestScanned < 2) continue;
+		if (iRestScanned < 3) iChance = 0;	// default: always
+
+		// Resolve animID to a concrete frame range so dispatch is a lookup.
+		const Sequence_t *pSeq = FindSequenceByName(pContainer, sAnimID);
+		if (!pSeq) continue;	// unknown animation, skip silently (game data can reference anims we don't have)
+
+		int iAbsFrame = pSeq->iStartFrame + iRelFrame;
+
+		AnimEvent_t ev = {0};
+		strncpy(ev.sEffectPath, sEffectPath, sizeof(ev.sEffectPath) - 1);
+		strncpy(ev.sBoltName,   sBoltName,   sizeof(ev.sBoltName)   - 1);
+		ev.iChance = iChance;
+
+		pContainer->AnimEventsByFrame[iAbsFrame].push_back(ev);
+		iTotalEvents++;
+	}
+
+	fclose(fHandle);
+	return iTotalEvents > 0;
+}

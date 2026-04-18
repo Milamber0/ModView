@@ -198,6 +198,8 @@ static void ModelContainer_Clear(ModelContainer_t* pContainer, void *pvData)
 	pContainer->iOmittedBoneWeights = 0;
 
 	pContainer->SequenceList.clear();
+	pContainer->AnimEventsByFrame.clear();
+	pContainer->iLastFrameFiredForEvents = -1;
 	pContainer->bSeqMultiLock_Primary_Active = false;
 	pContainer->SeqMultiLock_Primary.clear();
 	pContainer->bSeqMultiLock_Secondary_Active = false;
@@ -2704,7 +2706,24 @@ static void ModelContainer_CallBack_AddToDrawList(ModelContainer_t* pContainer, 
 			ModelDraw_BoundingBox( pContainer, !!(pContainer == &AppVars.Container) );
 			ModelDraw_Floor		 ( pContainer, !!(pContainer == &AppVars.Container) );
 			ModelDraw_OriginLines( !!(pContainer == &AppVars.Container) );
-			
+
+			// Dispatch any animevents.cfg effects whose absolute frame
+			// landed on this frame since last render. Bolt matrices were
+			// just populated by the render above, so this sees valid data.
+			// Physics tick happens globally once per scene render (see
+			// ModelList_AddModelsToDrawList); we only render here.
+			{
+				extern void Efx_DispatchFrameEvents(ModelContainer_t*, int);
+				extern void Efx_RenderForContainer(ModelContainer_t*);
+				int iLastFired = pContainer->iLastFrameFiredForEvents;
+				int iCurFrame  = pContainer->iCurrentFrame_Primary;
+				if (iCurFrame != iLastFired) {
+					Efx_DispatchFrameEvents(pContainer, iCurFrame);
+					pContainer->iLastFrameFiredForEvents = iCurFrame;
+				}
+				Efx_RenderForContainer(pContainer);
+			}
+
 			//#####R_ModelContainer_Apply(&AppVars.Container, R_ModelContainer_CallBack_InfoText, &TextData);
 			R_ModelContainer_CallBack_InfoText(pContainer, &TextData);
 		}
@@ -2763,6 +2782,13 @@ static void ModelList_AddModelsToDrawList(void)
 	{
 		extern int g_glowNumDrawSurfs;
 		g_glowNumDrawSurfs = 0;
+	}
+
+	// Advance physics for all live particles once per render frame, before
+	// any container draws. Individual containers only render.
+	{
+		extern void Efx_TickAll(void);
+		Efx_TickAll();
 	}
 
 	// add all models to draw list... (now draws them as well, and prints stats)
@@ -4335,12 +4361,14 @@ void ModelList_ForceRedraw(void)
 
 // called whenever qdir changes (to avoid using cached textures from other dirs), or on program shutdown
 void Media_Delete(void)
-{		
+{
 	Model_Delete();
 	RE_ModelBinCache_DeleteAll();
 	TextureList_DeleteAll();
-	KillAllShaderFiles();	
+	KillAllShaderFiles();
 	Skins_KillPreCacheInfo();
+	extern void Efx_Shutdown(void);
+	Efx_Shutdown();
 }
 
 

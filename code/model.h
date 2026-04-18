@@ -83,6 +83,18 @@ typedef struct
 
 typedef vector <Sequence_t> SequenceList_t;
 
+// One AEV_EFFECT entry from animevents.cfg, with the absolute frame number
+// (sequence start + relative frame) pre-resolved so event dispatch is a
+// direct frame-key lookup during playback.
+typedef struct
+{
+	char	sEffectPath[128];	// e.g. "effects/blaster/shot.efx" - relative to gamedir
+	char	sBoltName[64];		// e.g. "*r_hand" - bolt on this model
+	int		iChance;			// 0 or 100 = always; else 1..99 percent
+} AnimEvent_t;
+
+typedef map<int, vector<AnimEvent_t> > AnimEventsByFrame_t;
+
 #include "skins.h"
 #include "oldskins.h"
 
@@ -169,6 +181,8 @@ struct ModelContainer
 	int				iNumFrames;		// for easy frame capping
 	int				iNumLODs;
 	SequenceList_t	SequenceList;
+	AnimEventsByFrame_t	AnimEventsByFrame;		// parsed from animevents.cfg, keyed by absolute frame
+	int				iLastFrameFiredForEvents;	// last iCurrentFrame_Primary we fired events for, to avoid re-firing on redraw
 	bool			bSeqMultiLock_Primary_Active;
 	bool			bSeqMultiLock_Secondary_Active;
 	int				iSeqMultiLock_Primary_SeqHint;	// slightly odd usage, and self-correcting if illegal
