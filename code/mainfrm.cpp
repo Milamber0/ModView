@@ -245,22 +245,65 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		dstDC.CreateCompatibleDC(pDC);
 
 		int nIcons = srcInfo.bmWidth / 15;
+		int padWidth = nIcons * 16;
+		COLORREF btnFace = GetSysColor(COLOR_BTNFACE);
+
 		CBitmap paddedBmp;
-		paddedBmp.CreateCompatibleBitmap(pDC, nIcons * 16, 15);
+		paddedBmp.CreateCompatibleBitmap(pDC, padWidth, 15);
 
 		CBitmap *pOldSrc = srcDC.SelectObject(&srcBmp);
 		CBitmap *pOldDst = dstDC.SelectObject(&paddedBmp);
 
-		// Fill with toolbar background color (light gray)
-		dstDC.FillSolidRect(0, 0, nIcons * 16, 15, RGB(192, 192, 192));
+		// Fill padding with the current theme's button face color so the
+		// space between icons matches the toolbar.
+		dstDC.FillSolidRect(0, 0, padWidth, 15, btnFace);
 
-		// Copy each 15x15 icon into a 16x15 slot (centered)
+		// Copy each 15x15 icon into a 16x15 slot
 		for (int i = 0; i < nIcons; i++) {
 			dstDC.BitBlt(i * 16, 0, 15, 15, &srcDC, i * 15, 0, SRCCOPY);
 		}
 
 		dstDC.SelectObject(pOldDst);
 		srcDC.SelectObject(pOldSrc);
+
+		// Remap 0xC0C0C0 (the classic Win95 button-face color baked into the
+		// .bmp backgrounds) to the current COLOR_BTNFACE so icons blend with
+		// the modern toolbar theme. MFC's CToolBar::LoadToolBar does this
+		// automatically via CreateMappedBitmap, but TB_ADDBITMAP does not.
+		{
+			BITMAPINFO bmi = {0};
+			bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+			bmi.bmiHeader.biWidth = padWidth;
+			bmi.bmiHeader.biHeight = -15; // top-down
+			bmi.bmiHeader.biPlanes = 1;
+			bmi.bmiHeader.biBitCount = 32;
+			bmi.bmiHeader.biCompression = BI_RGB;
+
+			int rowBytes = padWidth * 4;
+			BYTE *pBits = new BYTE[rowBytes * 15];
+			HDC hdc = pDC->m_hDC;
+			HBITMAP hbm = (HBITMAP)paddedBmp.GetSafeHandle();
+
+			if (::GetDIBits(hdc, hbm, 0, 15, pBits, &bmi, DIB_RGB_COLORS))
+			{
+				BYTE tgtB = GetBValue(btnFace);
+				BYTE tgtG = GetGValue(btnFace);
+				BYTE tgtR = GetRValue(btnFace);
+				for (int y = 0; y < 15; y++) {
+					BYTE *row = pBits + y * rowBytes;
+					for (int x = 0; x < padWidth; x++) {
+						if (row[x*4] == 0xC0 && row[x*4+1] == 0xC0 && row[x*4+2] == 0xC0) {
+							row[x*4]   = tgtB;
+							row[x*4+1] = tgtG;
+							row[x*4+2] = tgtR;
+						}
+					}
+				}
+				::SetDIBits(hdc, hbm, 0, 15, pBits, &bmi, DIB_RGB_COLORS);
+			}
+			delete[] pBits;
+		}
+
 		ReleaseDC(pDC);
 
 		// Add the padded bitmap to the toolbar

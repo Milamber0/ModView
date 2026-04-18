@@ -283,12 +283,20 @@ void App_Init(void)
 }
 
 
-int CModViewApp::ExitInstance() 
+int CModViewApp::ExitInstance()
 {
 	bSafeToAddToMRU = false;
 
+	// Persist MRU and standard profile settings before running teardown, so a
+	// crash inside App_FinalExit() (GL/shutdown issues) can't eat the recent
+	// files list.
+	SaveStdProfileSettings();
+	if (m_pRecentFileList) {
+		m_pRecentFileList->WriteList();
+	}
+
 	App_FinalExit();
-	
+
 	return CWinApp::ExitInstance();
 }
 
