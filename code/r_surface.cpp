@@ -1969,14 +1969,24 @@ void RE_RenderGlowPass( void )
 	glBindTexture(GL_TEXTURE_2D, g_glowSceneTexture);
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], screenW, screenH);
 
+	// Clear color only - KEEP the depth buffer the main scene pass just wrote.
+	// Non-glow geometry wrote its depth during the scene render; preserving it
+	// means glow surfaces behind non-glow parts will now fail depth-test and
+	// get correctly occluded (visible in Ctrl+Y debug view, and prevents
+	// glow "shining through" the body in the composite). Glow stages are
+	// typically "depthFunc equal" or LEQUAL, both of which work fine against
+	// the existing depth since the glow surfaces' own Z values were written
+	// by the scene pass too.
 	glClearColor(0, 0, 0, 0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	// Re-traverse the bolt tree rendering only glow stages.
 	// Each container renders with its correct GL matrix (bolt transforms).
 	RE_RenderAllGlowStages();
 
-	// Draw saber glow sprites into the glow buffer
+	// Draw saber glow sprites into the glow buffer. These depth-test against
+	// the preserved scene depth so body parts in front of the blade occlude
+	// the glow the same way they occlude the opaque core in the scene pass.
 	if (AppVars.bSaberBlade[0] || AppVars.bSaberBlade[1]) {
 		RE_DrawSaberBlades(true);
 	}
