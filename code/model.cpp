@@ -344,6 +344,7 @@ void AppVars_OnceOnlyInit(void)
 	AppVars.saberCustomColor[0][0] = 255; AppVars.saberCustomColor[0][1] = 255; AppVars.saberCustomColor[0][2] = 255;
 	AppVars.saberCustomColor[1][0] = 255; AppVars.saberCustomColor[1][1] = 255; AppVars.saberCustomColor[1][2] = 255;
 	AppVars.saberLength			=	40.0f;
+	AppVars.bSaberCollisionFX	=	true;
 	AppVars.bUseAlpha			=	false;
 	AppVars.bUseAlphaMode2		=	false;
 	AppVars.bWireFrame			=	false;
@@ -2708,10 +2709,11 @@ static void ModelContainer_CallBack_AddToDrawList(ModelContainer_t* pContainer, 
 			ModelDraw_OriginLines( !!(pContainer == &AppVars.Container) );
 
 			// Dispatch any animevents.cfg effects whose absolute frame
-			// landed on this frame since last render. Bolt matrices were
-			// just populated by the render above, so this sees valid data.
-			// Physics tick happens globally once per scene render (see
-			// ModelList_AddModelsToDrawList); we only render here.
+			// landed on this frame, then draw this container's FX_RELATIVE
+			// particles inside its own modelview so they track the bolt
+			// (matches the game's FX_RELATIVE behaviour for bolted anim
+			// effects). World-space / physics-spawned particles are drawn
+			// separately after every container has rendered.
 			{
 				extern void Efx_DispatchFrameEvents(ModelContainer_t*, int);
 				extern void Efx_RenderForContainer(ModelContainer_t*);
@@ -2784,8 +2786,9 @@ static void ModelList_AddModelsToDrawList(void)
 		g_glowNumDrawSurfs = 0;
 	}
 
-	// Advance physics for all live particles once per render frame, before
-	// any container draws. Individual containers only render.
+	// Advance physics for live particles once per render frame, before any
+	// container draws. Individual containers just dispatch events; global
+	// rendering happens after the whole tree has been walked.
 	{
 		extern void Efx_TickAll(void);
 		Efx_TickAll();
@@ -2794,6 +2797,19 @@ static void ModelList_AddModelsToDrawList(void)
 	// add all models to draw list... (now draws them as well, and prints stats)
 	//
 	R_ModelContainer_Apply(&AppVars.Container, ModelContainer_CallBack_AddToDrawList);
+
+	// Now that every container has rendered (bolt matrices are fresh and
+	// glPopMatrix'd back to the scene modelview), test saber blades for
+	// collisions with each other and with the floor plane, spawning spark
+	// effects at contact points. Then draw every live particle in primary-
+	// local space so they're visually decoupled from the bolts that spawned
+	// them.
+	{
+		extern void Efx_CheckSaberCollisions(void);
+		extern void Efx_RenderAll(void);
+		Efx_CheckSaberCollisions();
+		Efx_RenderAll();
+	}
 
 	ModelDraw_InfoText_Totals();
 }

@@ -784,6 +784,7 @@ protected:
 
 		CheckDlgButton(IDC_SABER_RBLADE, AppVars.bSaberBlade[0] ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(IDC_SABER_LBLADE, AppVars.bSaberBlade[1] ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(IDC_SABER_COLLISION_FX, AppVars.bSaberCollisionFX ? BST_CHECKED : BST_UNCHECKED);
 
 		PopulateColorCombo(IDC_SABER_RCOMBO, AppVars.saberColorIndex[0]);
 		PopulateColorCombo(IDC_SABER_LCOMBO, AppVars.saberColorIndex[1]);
@@ -838,6 +839,11 @@ protected:
 			return TRUE;
 		case IDC_SABER_LBLADE:
 			AppVars.bSaberBlade[1] = (IsDlgButtonChecked(IDC_SABER_LBLADE) == BST_CHECKED);
+			GetParent()->Invalidate(false);
+			return TRUE;
+
+		case IDC_SABER_COLLISION_FX:
+			AppVars.bSaberCollisionFX = (IsDlgButtonChecked(IDC_SABER_COLLISION_FX) == BST_CHECKED);
 			GetParent()->Invalidate(false);
 			return TRUE;
 
@@ -1811,9 +1817,17 @@ void CMainFrame::OnUpdateViewBbox(CCmdUI* pCmdUI)
 }
 
 
-void CMainFrame::OnViewFloor() 
+void CMainFrame::OnViewFloor()
 {
 	AppVars.bFloor = !AppVars.bFloor;
+	// Snap the floor to the loaded model's lowest point so it lands at the
+	// character's feet instead of floating 24 units below (the arbitrary
+	// default). Matches what "Edit -> Set Floor to Current" does manually,
+	// and keeps saber-vs-floor collisions reachable for normal attack
+	// animations.
+	if (AppVars.bFloor && Model_Loaded()) {
+		AppVars.fFloorZ = Model_GetLowestPointOnPrimaryModel();
+	}
 	m_splitter.Invalidate(false);
 }
 

@@ -275,6 +275,7 @@ typedef struct
 	int		saberColorIndex[2];	// 0=blue,1=green,2=yellow,3=orange,4=red,5=purple,6=custom
 	byte	saberCustomColor[2][3]; // custom RGB when index==6
 	float	saberLength;		// blade length (game units)
+	bool	bSaberCollisionFX;	// spawn saber_block / saber_cut sparks on blade-blade / blade-floor contact
 	bool	bUseAlpha;
 	bool	bUseAlphaMode2;
 	bool	bWireFrame;
