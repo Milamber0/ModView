@@ -214,6 +214,8 @@
 #define IDC_ANIM_SEARCH_EDIT            1010
 #define IDC_ANIM_SEARCH_LIST            1011
 #define IDR_SHADER_TOOLBAR              160
+#define IDR_BLEND_GLOW2_JPG             170
+#define IDR_BLEND_LINE_JPG              171
 
 // Next default values for new objects
 // 

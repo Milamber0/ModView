@@ -217,6 +217,83 @@ void LoadJPG( const char *filename, unsigned char **pic, int *width, int *height
 
 
 
+// Memory-source variant of LoadJPG: accepts a caller-owned byte buffer instead
+// of hitting the gamedir FS. Used for bundled resources embedded in the exe
+// (e.g. the RGB saber blend textures).
+void LoadJPG_FromMemory( const unsigned char *src, int srcLen, unsigned char **pic, int *width, int *height )
+{
+	*pic = NULL;
+	*width = 0;
+	*height = 0;
+	if (!src || srcLen <= 0) return;
+
+	struct jpeg_decompress_struct cinfo;
+	struct jpeg_error_mgr jerr;
+	JSAMPARRAY buffer;
+	int row_stride;
+	unsigned char *out;
+
+	// The decoder reads 4k past the end in some paths - copy into an
+	// over-allocated buffer to match the on-disk LoadJPG path.
+	byte *fbuffer = (byte*) ri.Malloc( srcLen + 4096 );
+	if (!fbuffer) return;
+	memcpy(fbuffer, src, srcLen);
+
+	try {
+		cinfo.err = jpeg_std_error(&jerr);
+		jpeg_create_decompress(&cinfo);
+		jpeg_stdio_src(&cinfo, fbuffer);
+		(void) jpeg_read_header(&cinfo, TRUE);
+		(void) jpeg_start_decompress(&cinfo);
+
+		row_stride = cinfo.output_width * cinfo.output_components;
+		if (cinfo.output_components != 4 && cinfo.output_components != 1) {
+			WarningBox(va("JPG resource is unsupported color depth (%d)", cinfo.output_components));
+		}
+
+		out = (byte *) malloc(cinfo.output_width * cinfo.output_height * 4);
+		*pic = out;
+		*width = cinfo.output_width;
+		*height = cinfo.output_height;
+
+		byte *bbuf;
+		while (cinfo.output_scanline < cinfo.output_height) {
+			bbuf = ((out + (row_stride * cinfo.output_scanline)));
+			buffer = &bbuf;
+			(void) jpeg_read_scanlines(&cinfo, buffer, 1);
+		}
+
+		if (cinfo.output_components == 1) {
+			// expand 8-bit grayscale into BGRA in-place, walking backward.
+			byte *pbDest = (*pic + (cinfo.output_width * cinfo.output_height * 4)) - 1;
+			byte *pbSrc  = (*pic + (cinfo.output_width * cinfo.output_height    )) - 1;
+			int iPixels = cinfo.output_width * cinfo.output_height;
+			for (int i = 0; i < iPixels; i++) {
+				byte b = *pbSrc--;
+				*pbDest-- = 255;
+				*pbDest-- = b;
+				*pbDest-- = b;
+				*pbDest-- = b;
+			}
+		} else {
+			// ensure alpha channel is 255 across the board
+			byte *buf2 = *pic;
+			int j = cinfo.output_width * cinfo.output_height * 4;
+			for (int i = 3; i < j; i += 4) buf2[i] = 255;
+		}
+
+		(void) jpeg_finish_decompress(&cinfo);
+		jpeg_destroy_decompress(&cinfo);
+	}
+	catch (LPCSTR psMessage) {
+		ErrorBox(va("JPEG (memory) read error: %s", psMessage));
+		jpeg_destroy_decompress(&cinfo);
+		if (*pic) { free(*pic); *pic = NULL; }
+	}
+
+	free(fbuffer);
+}
+
 void JPG_ErrorThrow(LPCSTR message)
 {
 //	ri.Error( ERR_FATAL, "%s\n", message );

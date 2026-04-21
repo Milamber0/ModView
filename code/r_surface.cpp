@@ -9,6 +9,7 @@
 //
 #include "r_surface.h"
 #include "textures.h"
+#include "resource.h"
 #include <math.h>
 
 #ifndef M_PI
@@ -27,8 +28,55 @@ struct SaberTexSet { GLuint glow; GLuint core; };
 SaberTexSet g_saberTexSets[7] = {{0}};
 bool g_saberTexLoaded = false;
 
+// The "custom" (color index 6) blade path needs blend_glow2 / blend_line
+// textures, which are not always present in the active gamedir. To make the
+// RGB color picker Just Work in release builds, we bundle a copy of each JPG
+// inside the exe as an RCDATA resource (see modview.rc) and decode straight
+// from memory. RE_LoadBundledBlendTexture returns a fresh GL bind each call -
+// callers own the lifetime and glDeleteTextures on reset.
+#include "jpeg6/jpeglib.h"
+extern "C" void LoadJPG_FromMemory( const unsigned char *src, int srcLen,
+									 unsigned char **pic, int *width, int *height );
+
+static GLuint RE_LoadBundledBlendTexture(int iResourceId)
+{
+	HINSTANCE hInst = AfxGetInstanceHandle();
+	HRSRC hRes = FindResource(hInst, MAKEINTRESOURCE(iResourceId), RT_RCDATA);
+	if (!hRes) return 0;
+	HGLOBAL hData = LoadResource(hInst, hRes);
+	if (!hData) return 0;
+	const unsigned char *pBytes = (const unsigned char *)LockResource(hData);
+	DWORD dwSize = SizeofResource(hInst, hRes);
+	if (!pBytes || !dwSize) return 0;
+
+	unsigned char *pPixels = NULL;
+	int w = 0, h = 0;
+	LoadJPG_FromMemory(pBytes, (int)dwSize, &pPixels, &w, &h);
+	if (!pPixels || w <= 0 || h <= 0) {
+		if (pPixels) free(pPixels);
+		return 0;
+	}
+
+	GLuint bind = 0;
+	glGenTextures(1, &bind);
+	glBindTexture(GL_TEXTURE_2D, bind);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA8, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pPixels);
+
+	free(pPixels);
+	return bind;
+}
+
 void RE_ResetSaberBladeTextureCache(void)
 {
+	// The index-6 (custom/RGB) entries come from bundled resources and own
+	// their own GL names - delete those explicitly. The other six are in the
+	// shared texture manager and get cleaned up by TextureList_DeleteAll.
+	if (g_saberTexSets[6].glow) { glDeleteTextures(1, &g_saberTexSets[6].glow); }
+	if (g_saberTexSets[6].core) { glDeleteTextures(1, &g_saberTexSets[6].core); }
 	for (int c = 0; c < 7; c++) { g_saberTexSets[c].glow = 0; g_saberTexSets[c].core = 0; }
 	g_saberTexLoaded = false;
 }
@@ -1786,16 +1834,22 @@ void RE_DrawSaberBlades( bool bGlowOnly )
 		// clears the underlying texture cache so cached GL binds here would
 		// otherwise go stale and render white).
 		// 0=blue,1=green,2=yellow,3=orange,4=red,5=purple,6=custom(blend)
+		// The first six preset colors come from the gamedir (every JKA install
+		// has gfx/effects/sabers/<color>_glow2+_line). Index 6 (custom/RGB) is
+		// loaded from exe-bundled resources so the RGB picker works regardless
+		// of what's in the user's gamedir.
 		extern SaberTexSet g_saberTexSets[7];
 		extern bool g_saberTexLoaded;
 		if (!g_saberTexLoaded) {
-			static const char *colorNames[] = { "blue","green","yellow","orange","red","purple","blend" };
-			for (int c = 0; c < 7; c++) {
+			static const char *colorNames[] = { "blue","green","yellow","orange","red","purple" };
+			for (int c = 0; c < 6; c++) {
 				int h = Texture_LoadDirect(va("gfx/effects/sabers/%s_glow2", colorNames[c]));
 				if (h > 0) g_saberTexSets[c].glow = Texture_GetGLBind(h);
 				h = Texture_LoadDirect(va("gfx/effects/sabers/%s_line", colorNames[c]));
 				if (h > 0) g_saberTexSets[c].core = Texture_GetGLBind(h);
 			}
+			g_saberTexSets[6].glow = RE_LoadBundledBlendTexture(IDR_BLEND_GLOW2_JPG);
+			g_saberTexSets[6].core = RE_LoadBundledBlendTexture(IDR_BLEND_LINE_JPG);
 			g_saberTexLoaded = true;
 		}
 

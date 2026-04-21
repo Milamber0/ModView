@@ -18,6 +18,11 @@ typedef const char * LPCSTR;
 
 void LoadJPG( const char *filename, unsigned char **pic, int *width, int *height );
 
+// Memory-source variant: decode JPG from a caller-owned buffer. Used to pull
+// bundled images straight out of Win32 exe resources without round-tripping
+// through the gamedir filesystem layer.
+void LoadJPG_FromMemory( const unsigned char *src, int srcLen, unsigned char **pic, int *width, int *height );
+
 void JPG_ErrorThrow(LPCSTR message);
 void JPG_MessageOut(LPCSTR message);
 #define ERROR_STRING_NO_RETURN(message) JPG_ErrorThrow(message)

@@ -81,6 +81,13 @@ IDR_SHADER_TOOLBAR      BITMAP                  "res\\shader_toolbar.bmp"
 
 IDB_SPLASH              BITMAP                  "res\\Splsh16.bmp"
 
+// Bundled saber blade textures for the custom/RGB color path. These live in
+// the exe so ModView ships with working RGB sabers even when the active
+// gamedir doesn't ship gfx/effects/sabers/blend_*. See RE_DrawSaberBlades /
+// RE_LoadBlendSaberTexture in r_surface.cpp.
+IDR_BLEND_GLOW2_JPG     RCDATA                  "res\\blend_glow2.jpg"
+IDR_BLEND_LINE_JPG      RCDATA                  "res\\blend_line.jpg"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //

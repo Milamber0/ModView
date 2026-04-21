@@ -747,6 +747,72 @@ static BoltLocationDef g_boltLocations[] = {
 // Weapon Dialog
 // ============================================================================
 
+// CLiveSaberColorDialog: CColorDialog that live-updates the viewport while
+// the user drags the hue/RGB picker, instead of only applying on OK. A short
+// timer polls the dialog's R/G/B edit fields (well-known control IDs 706,
+// 707, 708) and pushes the color into AppVars.saberCustomColor[hand] +
+// kicks a ModelList_ForceRedraw. If the user cancels, we put the original
+// color back.
+class CLiveSaberColorDialog : public CColorDialog
+{
+public:
+	CLiveSaberColorDialog(COLORREF clrInit, DWORD dwFlags, CWnd *pParentWnd, int iHand)
+		: CColorDialog(clrInit, dwFlags, pParentWnd), m_iHand(iHand)
+	{
+		m_originalColor[0] = AppVars.saberCustomColor[iHand][0];
+		m_originalColor[1] = AppVars.saberCustomColor[iHand][1];
+		m_originalColor[2] = AppVars.saberCustomColor[iHand][2];
+	}
+
+	int m_iHand;
+	byte m_originalColor[3];
+
+	DECLARE_MESSAGE_MAP()
+protected:
+	virtual BOOL OnInitDialog();
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
+};
+
+BEGIN_MESSAGE_MAP(CLiveSaberColorDialog, CColorDialog)
+	ON_WM_TIMER()
+END_MESSAGE_MAP()
+
+BOOL CLiveSaberColorDialog::OnInitDialog()
+{
+	CColorDialog::OnInitDialog();
+	SetTimer(1, 30, NULL);
+	return TRUE;
+}
+
+void CLiveSaberColorDialog::OnTimer(UINT_PTR nIDEvent)
+{
+	if (nIDEvent == 1) {
+		// 706/707/708 are the standard COLOR_RED/GREEN/BLUE edit-field IDs in
+		// Win32's color dialog. Only push updates when all three parse cleanly
+		// so we don't flicker when the user's mid-typing.
+		BOOL bR = FALSE, bG = FALSE, bB = FALSE;
+		int r = GetDlgItemInt(706, &bR, FALSE);
+		int g = GetDlgItemInt(707, &bG, FALSE);
+		int b = GetDlgItemInt(708, &bB, FALSE);
+		if (bR && bG && bB) {
+			if (r < 0) r = 0; else if (r > 255) r = 255;
+			if (g < 0) g = 0; else if (g > 255) g = 255;
+			if (b < 0) b = 0; else if (b > 255) b = 255;
+			byte nR = (byte)r, nG = (byte)g, nB = (byte)b;
+			if (AppVars.saberCustomColor[m_iHand][0] != nR ||
+				AppVars.saberCustomColor[m_iHand][1] != nG ||
+				AppVars.saberCustomColor[m_iHand][2] != nB)
+			{
+				AppVars.saberCustomColor[m_iHand][0] = nR;
+				AppVars.saberCustomColor[m_iHand][1] = nG;
+				AppVars.saberCustomColor[m_iHand][2] = nB;
+				ModelList_ForceRedraw();
+			}
+		}
+	}
+	CColorDialog::OnTimer(nIDEvent);
+}
+
 class CWeaponDlg : public CDialog
 {
 public:
@@ -850,10 +916,16 @@ protected:
 		case IDC_SABER_RCOLOR: {
 			AppVars.saberColorIndex[0] = 6;  // switch to custom
 			((CComboBox*)GetDlgItem(IDC_SABER_RCOMBO))->SetCurSel(6);
-			CColorDialog dlg(RGB(AppVars.saberCustomColor[0][0], AppVars.saberCustomColor[0][1], AppVars.saberCustomColor[0][2]), CC_FULLOPEN | CC_RGBINIT, this);
-			if (dlg.DoModal() == IDOK) {
+			CLiveSaberColorDialog dlg(RGB(AppVars.saberCustomColor[0][0], AppVars.saberCustomColor[0][1], AppVars.saberCustomColor[0][2]), CC_FULLOPEN | CC_RGBINIT, this, 0);
+			INT_PTR result = dlg.DoModal();
+			if (result == IDOK) {
 				COLORREF c = dlg.GetColor();
 				AppVars.saberCustomColor[0][0] = GetRValue(c); AppVars.saberCustomColor[0][1] = GetGValue(c); AppVars.saberCustomColor[0][2] = GetBValue(c);
+			} else {
+				// Cancel: put back the color the user had before opening the picker.
+				AppVars.saberCustomColor[0][0] = dlg.m_originalColor[0];
+				AppVars.saberCustomColor[0][1] = dlg.m_originalColor[1];
+				AppVars.saberCustomColor[0][2] = dlg.m_originalColor[2];
 			}
 			GetParent()->Invalidate(false);
 			return TRUE;
@@ -861,10 +933,15 @@ protected:
 		case IDC_SABER_LCOLOR: {
 			AppVars.saberColorIndex[1] = 6;
 			((CComboBox*)GetDlgItem(IDC_SABER_LCOMBO))->SetCurSel(6);
-			CColorDialog dlg(RGB(AppVars.saberCustomColor[1][0], AppVars.saberCustomColor[1][1], AppVars.saberCustomColor[1][2]), CC_FULLOPEN | CC_RGBINIT, this);
-			if (dlg.DoModal() == IDOK) {
+			CLiveSaberColorDialog dlg(RGB(AppVars.saberCustomColor[1][0], AppVars.saberCustomColor[1][1], AppVars.saberCustomColor[1][2]), CC_FULLOPEN | CC_RGBINIT, this, 1);
+			INT_PTR result = dlg.DoModal();
+			if (result == IDOK) {
 				COLORREF c = dlg.GetColor();
 				AppVars.saberCustomColor[1][0] = GetRValue(c); AppVars.saberCustomColor[1][1] = GetGValue(c); AppVars.saberCustomColor[1][2] = GetBValue(c);
+			} else {
+				AppVars.saberCustomColor[1][0] = dlg.m_originalColor[0];
+				AppVars.saberCustomColor[1][1] = dlg.m_originalColor[1];
+				AppVars.saberCustomColor[1][2] = dlg.m_originalColor[2];
 			}
 			GetParent()->Invalidate(false);
 			return TRUE;
