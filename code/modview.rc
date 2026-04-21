@@ -1004,6 +1004,20 @@ BEGIN
     IDM_GLMSURFACE_CLEARROOT "Stop considering this surface to be the root"
 END
 
+// Tooltip / status-bar text for the shader toolbar buttons. The string after
+// '\n' is what Windows shows as the hover tooltip; the part before it goes
+// into the status bar. Command IDs must match the TBBUTTON entries in
+// CMainFrame::OnCreate where the shader toolbar is built programmatically.
+STRINGTABLE
+BEGIN
+    ID_SEQUENCES_SEARCH     "Search animations (Ctrl+F)\nSearch Animations"
+    ID_VIEW_SHADERS         "Toggle shader-based rendering (Ctrl+Q)\nShader Rendering"
+    ID_ANIMATION_SHADERS    "Animate shader stages over time (Ctrl+M)\nShader Animation"
+    ID_VIEW_ENTITYCOLOR     "Pick an entity tint color for the model\nEntity Color"
+    ID_VIEW_DYNAMICGLOW     "Toggle dynamic glow post-process\nDynamic Glow"
+    ID_VIEW_WEAPONS         "Attach weapons and configure lightsaber blades\nWeapons && Sabers"
+END
+
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
 
