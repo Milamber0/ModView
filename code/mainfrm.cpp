@@ -192,6 +192,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_ANIMATION_40FPS, OnAnimation40FPS)
 	//}}AFX_MSG_MAP
 	ON_COMMAND(ID_FILE_BATCHCONVERT, OnFileBatchconvert)
+	ON_WM_ENTERSIZEMOVE()
+	ON_WM_EXITSIZEMOVE()
 	END_MESSAGE_MAP()
 
 static UINT indicators[] =
@@ -201,6 +203,28 @@ static UINT indicators[] =
 	ID_INDICATOR_NUM,
 	ID_INDICATOR_SCRL,
 };
+
+// True while the user is actively drag-resizing or moving the main window.
+// We skip the glow post-process and several heavier GL operations in that
+// window because the NVIDIA driver sporadically AVs when the GL backing
+// surface is being resized underneath an in-flight SwapBuffers / copy.
+bool g_bInSizeMove = false;
+
+void CMainFrame::OnEnterSizeMove()
+{
+	g_bInSizeMove = true;
+	CFrameWnd::OnEnterSizeMove();
+}
+
+void CMainFrame::OnExitSizeMove()
+{
+	g_bInSizeMove = false;
+	CFrameWnd::OnExitSizeMove();
+	// Force a full repaint now that the window has settled, so the glow
+	// pass re-establishes the correct texture size.
+	extern void ModelList_ForceRedraw(void);
+	ModelList_ForceRedraw();
+}
 
 /////////////////////////////////////////////////////////////////////////////
 // CMainFrame construction/destruction

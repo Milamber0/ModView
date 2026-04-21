@@ -194,6 +194,8 @@ protected:
 public:
 	void StatusMessage(LPCTSTR message);
 	afx_msg void OnFileBatchconvert();
+	afx_msg void OnEnterSizeMove();
+	afx_msg void OnExitSizeMove();
 };
 
 /////////////////////////////////////////////////////////////////////////////

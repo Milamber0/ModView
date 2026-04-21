@@ -1952,6 +1952,27 @@ static int NextPowerOf2(int v) {
 	return p;
 }
 
+// Static zero buffer sized up to the largest texture we've allocated. Used
+// instead of passing NULL to glTexImage2D - with NULL, the NVIDIA driver can
+// leave stale contents in memory the texture hasn't yet been written to,
+// which bleeds into the blur passes when they sample past the downsampled
+// content region and read from "uninitialized" texels that aren't actually
+// zero. Reallocated on size-up only.
+static unsigned char *g_glowZeroBuf = NULL;
+static int g_glowZeroBufSize = 0;
+
+static void Glow_EnsureZeroBuf(int texW, int texH)
+{
+	// GL_RGBA with GL_UNSIGNED_BYTE = 4 bytes per pixel for the upload, even
+	// though the internal format is RGBA16.
+	int needed = texW * texH * 4;
+	if (needed > g_glowZeroBufSize) {
+		free(g_glowZeroBuf);
+		g_glowZeroBuf = (unsigned char*)calloc(needed, 1);
+		g_glowZeroBufSize = needed;
+	}
+}
+
 static void Glow_EnsureTextures(int screenW, int screenH)
 {
 	int texW = NextPowerOf2(screenW);
@@ -1966,9 +1987,11 @@ static void Glow_EnsureTextures(int screenW, int screenH)
 	if (!g_glowSceneTexture) glGenTextures(1, &g_glowSceneTexture);
 	if (!g_glowBlurTexture) glGenTextures(1, &g_glowBlurTexture);
 
+	Glow_EnsureZeroBuf(texW, texH);
+
 	// Scene texture: NEAREST for pixel-perfect copy-back, 16-bit for precision
 	glBindTexture(GL_TEXTURE_2D, g_glowSceneTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_glowZeroBuf);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -1976,7 +1999,7 @@ static void Glow_EnsureTextures(int screenW, int screenH)
 
 	// Blur texture: LINEAR for smooth blur sampling, 16-bit for precision, clamp to black border
 	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_glowZeroBuf);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -2004,6 +2027,15 @@ void RE_RenderGlowPass( void )
 {
 	if (!AppVars.bDynamicGlow || !AppVars.bShaderRendering)
 		return;
+
+	// Skip the glow pass while the user is dragging the window corner - the
+	// pass does glCopyTexSubImage2D + large glTexImage2D reallocations, and
+	// the NVIDIA driver AVs in nvoglv32 when the window's backing surface is
+	// being resized underneath those calls. The scene still renders fine
+	// without glow during the drag; we re-establish everything on
+	// WM_EXITSIZEMOVE. See CMainFrame::OnEnterSizeMove / OnExitSizeMove.
+	extern bool g_bInSizeMove;
+	if (g_bInSizeMove) return;
 
 	// Check if anything needs the glow pass
 	bool bHasGlowShaders = false;
@@ -2114,9 +2146,15 @@ void RE_RenderGlowPass( void )
 	if (blurW < 1) blurW = 1;
 	if (blurH < 1) blurH = 1;
 
-	// Clear the entire blur texture to black first (prevents edge bleed from stale data)
+	// NOTE: no per-frame re-allocation here. The earlier code passed NULL to
+	// glTexImage2D each frame "to clear to black", but at this point the
+	// texture already holds the full-res glow we just captured above - an
+	// actual-zero clear would wipe it before the downsample runs. On NVIDIA
+	// the NULL upload happened to be a no-op (keeping the glow), which is
+	// what the rest of the pipeline relied on. Initial zero-fill lives in
+	// Glow_EnsureTextures so the texture starts clean on resize; between
+	// frames the blur pass naturally overwrites the valid [0, blurW] region.
 	glBindTexture(GL_TEXTURE_2D, g_glowBlurTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, g_glowTexWidth, g_glowTexHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
 	// Render downsample into the blur viewport area
 	glViewport(viewport[0], viewport[1], blurW, blurH);

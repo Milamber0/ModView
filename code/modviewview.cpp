@@ -85,6 +85,16 @@ void CModViewView::OnDraw(CDC* pDC)
 	CModViewDoc* pDoc = GetDocument();
 	ASSERT_VALID(pDoc);
 
+	// Skip rendering while the user is drag-resizing the main window. The
+	// NVIDIA driver can AV inside wglMakeCurrent / SwapBuffers when those
+	// race against the OS resizing the window's backing surface - we saw
+	// this even with no model loaded, so it's the minimal GL path itself
+	// that trips, not anything in our renderer. The window keeps its stale
+	// contents during the drag; CMainFrame::OnExitSizeMove forces a full
+	// redraw once the resize settles.
+	extern bool g_bInSizeMove;
+	if (g_bInSizeMove) return;
+
 	if (m_hRC && m_hDC)
 	{
 		if (wglMakeCurrent(m_hDC,m_hRC))
@@ -227,20 +237,23 @@ void CModViewView::OnSize(UINT nType, int cx, int cy)
 
 BOOL CModViewView::OnEraseBkgnd(CDC* pDC)
 {
-	// actually this looks nicer to not do it at all, so...
-	//
-	/*
-//	return CView::OnEraseBkgnd(pDC);
-
-	CBrush backBrush(RGB(AppVars._R, AppVars._G, AppVars._B));      // Save old brush
-	CBrush* pOldBrush = pDC->SelectObject(&backBrush);
-
-	CRect rect;
-	pDC->GetClipBox(&rect);     // Erase the area needed
-	pDC->PatBlt(rect.left, rect.top, rect.Width(), rect.Height(), PATCOPY);
-
-	pDC->SelectObject(pOldBrush);
-	  */
+	// During normal rendering the GL pass paints the full client every frame,
+	// so a background erase would just cause a flicker - return TRUE without
+	// painting. But while the user is drag-resizing, OnDraw is skipped to
+	// keep the NVIDIA driver from AVing against the resizing surface. In
+	// that window we do need to paint SOMETHING into the newly-uncovered
+	// area so the user doesn't see stale/torn pixels - paint the current
+	// background color via GDI (not GL).
+	extern bool g_bInSizeMove;
+	if (g_bInSizeMove)
+	{
+		CBrush backBrush(RGB(AppVars._R, AppVars._G, AppVars._B));
+		CBrush *pOldBrush = pDC->SelectObject(&backBrush);
+		CRect rect;
+		pDC->GetClipBox(&rect);
+		pDC->PatBlt(rect.left, rect.top, rect.Width(), rect.Height(), PATCOPY);
+		pDC->SelectObject(pOldBrush);
+	}
 	return TRUE;
 }
 
