@@ -19,6 +19,20 @@
 bool g_bRenderGlowingObjects = false;	// when true, only glow stages are rendered
 float g_fAccumulatedShaderTime = 0.0f;	// accumulated shader animation time
 
+// Saber blade texture cache - loaded lazily on first blade draw per gamedir.
+// Media_Delete (called on gamedir switch) drops all underlying GL textures,
+// so we need to flush and re-resolve these binds. RE_ResetSaberBladeTextureCache
+// is the hook.
+struct SaberTexSet { GLuint glow; GLuint core; };
+SaberTexSet g_saberTexSets[7] = {{0}};
+bool g_saberTexLoaded = false;
+
+void RE_ResetSaberBladeTextureCache(void)
+{
+	for (int c = 0; c < 7; c++) { g_saberTexSets[c].glow = 0; g_saberTexSets[c].core = 0; }
+	g_saberTexLoaded = false;
+}
+
 // Saved primary model state for the glow pass (survives per-container reset)
 drawSurf_t g_glowDrawSurfs[MAX_DRAWSURFS];
 int g_glowNumDrawSurfs = 0;
@@ -1768,24 +1782,25 @@ void RE_DrawSaberBlades( bool bGlowOnly )
 			colR = colG = colB = 255;
 		}
 
-		// Load saber textures per color (once)
+		// Load saber textures per color (once per gamedir change - Media_Delete
+		// clears the underlying texture cache so cached GL binds here would
+		// otherwise go stale and render white).
 		// 0=blue,1=green,2=yellow,3=orange,4=red,5=purple,6=custom(blend)
-		struct SaberTexSet { GLuint glow; GLuint core; };
-		static SaberTexSet saberTexSets[7] = {{0}};
-		static bool saberTexLoaded = false;
-		if (!saberTexLoaded) {
+		extern SaberTexSet g_saberTexSets[7];
+		extern bool g_saberTexLoaded;
+		if (!g_saberTexLoaded) {
 			static const char *colorNames[] = { "blue","green","yellow","orange","red","purple","blend" };
 			for (int c = 0; c < 7; c++) {
 				int h = Texture_LoadDirect(va("gfx/effects/sabers/%s_glow2", colorNames[c]));
-				if (h > 0) saberTexSets[c].glow = Texture_GetGLBind(h);
+				if (h > 0) g_saberTexSets[c].glow = Texture_GetGLBind(h);
 				h = Texture_LoadDirect(va("gfx/effects/sabers/%s_line", colorNames[c]));
-				if (h > 0) saberTexSets[c].core = Texture_GetGLBind(h);
+				if (h > 0) g_saberTexSets[c].core = Texture_GetGLBind(h);
 			}
-			saberTexLoaded = true;
+			g_saberTexLoaded = true;
 		}
 
-		GLuint glowTex = saberTexSets[colorIdx].glow;
-		GLuint coreTex = saberTexSets[colorIdx].core;
+		GLuint glowTex = g_saberTexSets[colorIdx].glow;
+		GLuint coreTex = g_saberTexSets[colorIdx].core;
 
 		// Save GL state
 		glPushAttrib(GL_ALL_ATTRIB_BITS);

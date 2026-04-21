@@ -124,13 +124,55 @@ static bool SetQdirFromPath2( const char *path, const char *psBaseDir )
 //
 //	and produces "textures/borg/name.tga"
 //
+// Find the `<base-marker>/<subfolder>/` segment in `path` (scanning from the
+// right so the innermost base wins when there are multiple). Writes the
+// normalized prefix (lowercased, forward slashes, trailing /) into outGamedir.
+// Does NOT touch the global `gamedir`, so callers can use it as a scoped
+// override without triggering Media_Delete.
+bool ExtractGamedirFromPath( const char *path, char *outGamedir, int outSize )
+{
+	if (!path || !outGamedir || outSize < 2) return false;
+
+	char sTmp[1024];
+	strncpy(sTmp, path, sizeof(sTmp) - 1);
+	sTmp[sizeof(sTmp) - 1] = '\0';
+
+	// Normalize to match how gamedir is stored elsewhere in the codebase.
+	for (int i = 0; sTmp[i]; i++) {
+		if (sTmp[i] == '\\') sTmp[i] = '/';
+	}
+	_strlwr(sTmp);
+
+	static const char *sBases[] = { BASEDIRNAME, BASEDIRNAME_XMEN };
+	for (int bi = 0; bi < (int)(sizeof(sBases) / sizeof(sBases[0])); bi++) {
+		const char *psBase = sBases[bi];
+		int baseLen = (int)strlen(psBase);
+
+		// Scan from the right for "/<psBase>/" to pick up the innermost match.
+		for (int c = (int)strlen(sTmp) - baseLen - 1; c > 0; c--) {
+			if (sTmp[c - 1] == '/' &&
+				_strnicmp(sTmp + c, psBase, baseLen) == 0 &&
+				sTmp[c + baseLen] == '/')
+			{
+				int endPos = c + baseLen + 1;		// include the trailing '/'
+				if (endPos >= outSize) return false;
+				strncpy(outGamedir, sTmp, endPos);
+				outGamedir[endPos] = '\0';
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 void Filename_RemoveQUAKEBASE(CString &string)
 {
-	string.Replace("\\","/");		
-	string.MakeLower();	
+	string.Replace("\\","/");
+	string.MakeLower();
 
 /*
-	int loc = string.Find("/quake");	
+	int loc = string.Find("/quake");
 	if (loc >=0 )
 	{
 		loc = string.Find("/",loc+1);
@@ -146,11 +188,11 @@ void Filename_RemoveQUAKEBASE(CString &string)
 				string = string.Mid(loc+1);
 			}
 		}
-	}	
+	}
 */
 
 //	SetQdirFromPath( string );
-	string.Replace( gamedir, "" );	
+	string.Replace( gamedir, "" );
 }
 
 

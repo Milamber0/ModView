@@ -9,6 +9,13 @@ extern char qdir[];
 extern char	gamedir[];
 
 void SetQdirFromPath( const char *path );
+// Extracts the "<drive>/.../base/" (or "/development/") prefix from a full
+// path into outGamedir without mutating the global `gamedir` or triggering
+// Media_Delete. Returns true if a recognizable basedir was found. Use this
+// when you need to temporarily speak a different gamedir for a single
+// asset load (e.g. a bolted model that was saved under a different base
+// than the currently-loaded primary).
+bool ExtractGamedirFromPath( const char *path, char *outGamedir, int outSize );
 void Filename_RemoveQUAKEBASE(CString &string);
 bool FileExists (LPCSTR psFilename);
 long FileLen( LPCSTR psFilename);

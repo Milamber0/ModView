@@ -1641,6 +1641,30 @@ static bool _Actual_Model_LoadBoltOn(LPCSTR psFullPathedFilename, ModelHandle_t 
 		//
 		if (iBoltIndex < (bBoltIsBone?pContainer->iBoneBolt_MaxBoltPoints:pContainer->iSurfaceBolt_MaxBoltPoints) && iBoltIndex >= 0)
 		{
+			// Scene state can save a bolted model whose gamedir is different
+			// from the primary model's (e.g. primary from D:\Jedi Academy\Tools\base,
+			// saber from E:\...\GameData\Base). The global `gamedir` is the
+			// primary's; stripping that off an E:\... bolt path is a no-op, the
+			// full 115-char absolute path reaches RE_RegisterModel, and it trips
+			// the MAX_QPATH limit. Work around that by extracting the bolt-on's
+			// own basedir from its full path and swapping it into `gamedir` just
+			// long enough for the register call. We can't go through
+			// SetQdirFromPath here because that triggers Media_Delete, which
+			// would tear down the primary model mid-load.
+			char sSavedGamedir[1024];
+			strncpy(sSavedGamedir, gamedir, sizeof(sSavedGamedir) - 1);
+			sSavedGamedir[sizeof(sSavedGamedir) - 1] = '\0';
+
+			char sBoltGamedir[1024];
+			bool bSwappedGamedir = false;
+			if (ExtractGamedirFromPath(psFullPathedFilename, sBoltGamedir, sizeof(sBoltGamedir)) &&
+				_stricmp(sBoltGamedir, sSavedGamedir) != 0)
+			{
+				strncpy(gamedir, sBoltGamedir, 1023);
+				gamedir[1023] = '\0';
+				bSwappedGamedir = true;
+			}
+
 			CString strLocalFilename( psFullPathedFilename );
 			Filename_RemoveQUAKEBASE(strLocalFilename);
 
@@ -1668,10 +1692,15 @@ static bool _Actual_Model_LoadBoltOn(LPCSTR psFullPathedFilename, ModelHandle_t 
 			ModelContainer_t *pNewContainerLocation =	&vBoltedContainers[ vBoltedContainers.size() -1 ];
 			ModelHandle_t hModel = ModelContainer_RegisterModel(strLocalFilename, pNewContainerLocation, pContainer->hTreeItem_BoltOns);
 
+			if (bSwappedGamedir) {
+				strncpy(gamedir, sSavedGamedir, 1023);
+				gamedir[1023] = '\0';
+			}
+
 			if (bBoltIsBone)
 			{
 				pNewContainerLocation->pBoneBolt_ParentContainer = pContainer;
-				pNewContainerLocation->iBoneBolt_ParentBoltIndex = iBoltIndex;				
+				pNewContainerLocation->iBoneBolt_ParentBoltIndex = iBoltIndex;
 			}
 			else
 			{
@@ -4404,6 +4433,8 @@ void Media_Delete(void)
 	Skins_KillPreCacheInfo();
 	extern void Efx_Shutdown(void);
 	Efx_Shutdown();
+	extern void RE_ResetSaberBladeTextureCache(void);
+	RE_ResetSaberBladeTextureCache();
 }
 
 
