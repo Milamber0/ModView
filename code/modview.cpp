@@ -193,6 +193,8 @@ void Filename_AddToMRU(LPCSTR psFilename)
 /////////////////////////////////////////////////////////////////////////////
 // CAboutDlg dialog used for App About
 
+#include "modview_version.h"
+
 class CAboutDlg : public CDialog
 {
 public:
@@ -207,6 +209,7 @@ public:
 	//{{AFX_VIRTUAL(CAboutDlg)
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+	virtual BOOL OnInitDialog();
 	//}}AFX_VIRTUAL
 
 // Implementation
@@ -228,6 +231,21 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 	CDialog::DoDataExchange(pDX);
 	//{{AFX_DATA_MAP(CAboutDlg)
 	//}}AFX_DATA_MAP
+}
+
+BOOL CAboutDlg::OnInitDialog()
+{
+	CDialog::OnInitDialog();
+	// Both labels pick up the version from the CMake-generated header so CI
+	// release builds (-DMODVIEW_VERSION_STRING=3.X) display the right number
+	// without touching the .rc by hand. The window caption stays "About
+	// ModView 3" from the .rc - the product line name, not the version.
+	CString sVersion, sCredit;
+	sVersion.Format("ModView Version %s", MODVIEW_VERSION_STRING);
+	sCredit.Format("%s Created by Milamber. Originally Written by Ste Cork (+ MFC help from Mike Crowns)", MODVIEW_VERSION_STRING);
+	SetDlgItemText(IDC_ABOUT_VERSION, sVersion);
+	SetDlgItemText(IDC_ABOUT_CREDIT, sCredit);
+	return TRUE;
 }
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialog)

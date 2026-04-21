@@ -1,5 +1,42 @@
 cmake_minimum_required(VERSION 3.20)
-project(ModView VERSION 3.0 LANGUAGES C CXX)
+
+# Release version - overridden by CI (-DMODVIEW_VERSION_STRING="3.4"). Local
+# dev builds use "3.0-dev". The About dialog and VS_VERSION_INFO resources
+# both pick this up via modview_version.h generated below.
+if(NOT DEFINED MODVIEW_VERSION_STRING)
+    set(MODVIEW_VERSION_STRING "3.0-dev")
+endif()
+
+# Parse X.Y[.Z][-suffix] into numeric MAJOR/MINOR/PATCH. We only use the
+# three numeric components in the Win32 VS_VERSION_INFO block; any trailing
+# "-dev" / "-beta" suffix stays in MODVIEW_VERSION_STRING for display only.
+string(REGEX REPLACE "[-+].*$" "" _mv_numeric "${MODVIEW_VERSION_STRING}")
+string(REPLACE "." ";" _mv_parts "${_mv_numeric}")
+list(LENGTH _mv_parts _mv_count)
+list(GET _mv_parts 0 MODVIEW_VERSION_MAJOR)
+if(_mv_count GREATER 1)
+    list(GET _mv_parts 1 MODVIEW_VERSION_MINOR)
+else()
+    set(MODVIEW_VERSION_MINOR 0)
+endif()
+if(_mv_count GREATER 2)
+    list(GET _mv_parts 2 MODVIEW_VERSION_PATCH)
+else()
+    set(MODVIEW_VERSION_PATCH 0)
+endif()
+
+project(ModView VERSION ${MODVIEW_VERSION_MAJOR}.${MODVIEW_VERSION_MINOR}.${MODVIEW_VERSION_PATCH} LANGUAGES C CXX)
+
+message(STATUS "ModView version: ${MODVIEW_VERSION_STRING} (${MODVIEW_VERSION_MAJOR}.${MODVIEW_VERSION_MINOR}.${MODVIEW_VERSION_PATCH})")
+
+# Generate modview_version.h from the template so both C++ and the .rc can
+# consume the same macros. Placed in build/generated so a fresh clone with
+# no build dir doesn't accidentally carry a stale copy.
+configure_file(
+    ${CMAKE_SOURCE_DIR}/code/modview_version.h.in
+    ${CMAKE_BINARY_DIR}/generated/modview_version.h
+    @ONLY
+)
 
 # Windows-only MFC application
 if(NOT WIN32)
@@ -119,6 +156,7 @@ set(MODVIEW_HEADERS
     code/todo.h
     code/wintalk.h
     code/efx.h
+    code/modview_version.h.in
 )
 
 # Embedded library sources (compiled as part of the executable, matching the vcxproj)
@@ -200,6 +238,7 @@ target_include_directories(ModView PRIVATE
     code/jpeg6
     code/zlib
     code/png
+    ${CMAKE_BINARY_DIR}/generated
 )
 
 # Preprocessor definitions

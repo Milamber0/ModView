@@ -217,6 +217,11 @@
 #define IDR_BLEND_GLOW2_JPG             170
 #define IDR_BLEND_LINE_JPG              171
 
+// About dialog version labels - set at runtime from modview_version.h macros
+// so the displayed build number tracks the CI release tag.
+#define IDC_ABOUT_VERSION               1040
+#define IDC_ABOUT_CREDIT                1041
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
