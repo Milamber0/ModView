@@ -3662,7 +3662,8 @@ static void ModelDraw_InfoText_Totals(void)
 	// EFX diagnostics - always visible when an effect has ever fired this
 	// session. Shows live + total particle counts so even short-lived bursts
 	// leave evidence (live will be 0 afterwards but total stays), plus the
-	// last effect/bolt that actually dispatched.
+	// last effect/bolt that actually dispatched. Right-aligned to the bottom
+	// corner so it doesn't overlap the skin-file text that lives bottom-left.
 	{
 		extern int  g_iEfxEventsFired;
 		extern int  g_iEfxParticlesLive;
@@ -3670,12 +3671,13 @@ static void ModelDraw_InfoText_Totals(void)
 		extern char g_sEfxLastEffect[];
 		extern char g_sEfxLastBolt[];
 		if (g_iEfxEventsFired > 0 || g_iEfxParticlesLive > 0) {
+			const char *psText = va("EFX: %d fired, %d live / %d total   last: %s @ %s",
+									g_iEfxEventsFired, g_iEfxParticlesLive, g_iEfxParticlesTotal,
+									g_sEfxLastEffect[0] ? g_sEfxLastEffect : "(none)",
+									g_sEfxLastBolt[0]   ? g_sEfxLastBolt   : "");
+			int x = g_iScreenWidth - (TEXT_WIDTH * (int)strlen(psText)) - TEXT_WIDTH;	// trailing pad
 			int y = g_iScreenHeight - TEXT_DEPTH * 2;
-			Text_DisplayFlat(va("EFX: %d fired, %d live / %d total   last: %s @ %s",
-								g_iEfxEventsFired, g_iEfxParticlesLive, g_iEfxParticlesTotal,
-								g_sEfxLastEffect[0] ? g_sEfxLastEffect : "(none)",
-								g_sEfxLastBolt[0]   ? g_sEfxLastBolt   : ""),
-							 TEXT_WIDTH, y, 0, 255, 255, false);	// cyan
+			Text_DisplayFlat(psText, x, y, 0, 255, 255, false);		// cyan
 		}
 	}
 

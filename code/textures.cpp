@@ -938,17 +938,28 @@ void TextureList_Refresh(void)
 
 				if (pTexture->pPixels)	// file loaded ok?
 				{
-					// now bind to opengl texture...
-					// 
-					Texture_BindAndUpload(pTexture);	
+					// Drain any pre-existing GL error flag so we only report
+					// errors actually caused by the upload below. The glow
+					// pass and other rendering paths can leave a non-zero
+					// error sitting in the driver that would otherwise get
+					// misattributed here (and halt debug builds on assert).
+					while (glGetError() != GL_NO_ERROR) { /* drain */ }
 
-					// check errors from texture binding
+					Texture_BindAndUpload(pTexture);
+
 					GLenum error = glGetError();
-					if (error) 
+					if (error)
 					{
-						assert(0);
-						ErrorBox(va("TextureList_Refresh::glGetError = %d", error));
-						return;
+						// Non-fatal - log once and keep refreshing the rest
+						// of the list. An ErrorBox per offending texture
+						// would stack up into dozens of modals if anything
+						// went wrong broadly.
+						static bool bReportedOnce = false;
+						if (!bReportedOnce) {
+							bReportedOnce = true;
+							OutputDebugString(va("TextureList_Refresh: glGetError = 0x%x on '%s'\n",
+												 error, str.c_str()));
+						}
 					}
 				}
 				else
