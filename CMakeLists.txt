@@ -103,6 +103,7 @@ set(MODVIEW_SOURCES
     code/GenericParser2.cpp
     code/scene_state.cpp
     code/efx.cpp
+    code/updater.cpp
 )
 
 set(MODVIEW_HEADERS
@@ -156,6 +157,7 @@ set(MODVIEW_HEADERS
     code/todo.h
     code/wintalk.h
     code/efx.h
+    code/updater.h
     code/modview_version.h.in
 )
 
@@ -273,6 +275,7 @@ target_link_libraries(ModView PRIVATE
     opengl32
     glu32
     winmm
+    wininet
 )
 
 # Debug build produces ModView_d.exe

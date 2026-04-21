@@ -22,6 +22,7 @@
 #include "splash.h"
 #include "files.h"
 #include "r_common.h"
+#include "updater.h"
 //
 #include "MainFrm.h"
 
@@ -194,6 +195,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_FILE_BATCHCONVERT, OnFileBatchconvert)
 	ON_WM_ENTERSIZEMOVE()
 	ON_WM_EXITSIZEMOVE()
+	ON_COMMAND(ID_HELP_CHECKFORUPDATES, OnHelpCheckForUpdates)
+	ON_MESSAGE(WM_UPDATER_AVAILABLE, OnUpdaterAvailable)
 	END_MESSAGE_MAP()
 
 static UINT indicators[] =
@@ -224,6 +227,22 @@ void CMainFrame::OnExitSizeMove()
 	// pass re-establishes the correct texture size.
 	extern void ModelList_ForceRedraw(void);
 	ModelList_ForceRedraw();
+}
+
+void CMainFrame::OnHelpCheckForUpdates()
+{
+	extern void Updater_CheckAndPromptInteractive(CWnd *);
+	Updater_CheckAndPromptInteractive(this);
+}
+
+LRESULT CMainFrame::OnUpdaterAvailable(WPARAM /*wParam*/, LPARAM lParam)
+{
+	// Posted from the background update-check worker when a newer release
+	// was found. The lParam carries an allocated context which the helper
+	// below takes ownership of and frees.
+	extern void Updater_ShowDialogFromBackgroundResult(CWnd *, LPARAM);
+	Updater_ShowDialogFromBackgroundResult(this, lParam);
+	return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////

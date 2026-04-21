@@ -192,6 +192,15 @@
 #define ID_VIEW_GLOWFULLBRIGHTCOMP      32949
 #define ID_VIEW_GLOWDEBUG              32960
 #define ID_VIEW_WEAPONS                 32950
+#define ID_HELP_CHECKFORUPDATES         32951
+
+// Update-available dialog (see updater.cpp).
+#define IDD_UPDATE_DIALOG               180
+#define IDC_UPDATE_MESSAGE              1050
+#define IDC_UPDATE_SKIP_VERSION         1051
+#define IDC_UPDATE_INSTALL              1052
+#define IDC_UPDATE_OPENPAGE             1053
+#define IDC_UPDATE_LATER                1054
 #define ID_WEAPON_REMOVEALL             32951
 #define IDD_WEAPON_DIALOG               162
 #define IDC_WEAPON_LIST                 1020

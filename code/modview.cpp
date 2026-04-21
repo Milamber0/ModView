@@ -173,6 +173,15 @@ BOOL CModViewApp::InitInstance()
 
 	CSplashWnd::HideSplashScreen(true);
 	StatusMessage(NULL);
+
+	// Fire-and-forget check for a newer release on GitHub. Runs on a worker
+	// thread so the main UI stays responsive; posts WM_UPDATER_AVAILABLE
+	// back to the main frame if a newer tag is found. Silent on failure
+	// (no network, etc) and skipped entirely for '-dev' builds.
+	{
+		extern void Updater_StartBackgroundCheck(CWnd *);
+		Updater_StartBackgroundCheck(m_pMainWnd);
+	}
 	/*
 extern void R_LoadQuaternionIndex(const char* filename);
 

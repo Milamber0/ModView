@@ -196,6 +196,8 @@ public:
 	afx_msg void OnFileBatchconvert();
 	afx_msg void OnEnterSizeMove();
 	afx_msg void OnExitSizeMove();
+	afx_msg void OnHelpCheckForUpdates();
+	afx_msg LRESULT OnUpdaterAvailable(WPARAM wParam, LPARAM lParam);
 };
 
 /////////////////////////////////////////////////////////////////////////////

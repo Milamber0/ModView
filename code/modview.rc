@@ -243,6 +243,8 @@ BEGIN
     END
     POPUP "&Help"
     BEGIN
+        MENUITEM "&Check for Updates...",       ID_HELP_CHECKFORUPDATES
+        MENUITEM SEPARATOR
         MENUITEM "&About ModView 3...",         ID_APP_ABOUT
     END
 END
@@ -589,6 +591,18 @@ BEGIN
     LTEXT           "Search:",IDC_STATIC,7,7,30,8
     EDITTEXT        IDC_ANIM_SEARCH_EDIT,40,5,203,14,ES_AUTOHSCROLL
     LISTBOX         IDC_ANIM_SEARCH_LIST,7,23,236,270,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY
+END
+
+IDD_UPDATE_DIALOG DIALOGEX 0, 0, 260, 120
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ModView Update Available"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "",IDC_UPDATE_MESSAGE,7,7,246,55
+    AUTOCHECKBOX    "Don't remind me about this version again",IDC_UPDATE_SKIP_VERSION,7,68,200,10
+    PUSHBUTTON      "Install Now",IDC_UPDATE_INSTALL,7,92,74,22,BS_DEFPUSHBUTTON
+    PUSHBUTTON      "Open Release Page",IDC_UPDATE_OPENPAGE,91,92,80,22
+    PUSHBUTTON      "Later",IDC_UPDATE_LATER,181,92,72,22
 END
 
 IDD_DIALOG_NPCS DIALOG 0, 0, 383, 340
@@ -1017,6 +1031,7 @@ BEGIN
     ID_VIEW_ENTITYCOLOR     "Pick an entity tint color for the model\nEntity Color"
     ID_VIEW_DYNAMICGLOW     "Toggle dynamic glow post-process\nDynamic Glow"
     ID_VIEW_WEAPONS         "Attach weapons and configure lightsaber blades\nWeapons && Sabers"
+    ID_HELP_CHECKFORUPDATES "Check GitHub for a newer ModView release\nCheck for Updates"
 END
 
 #endif    // English (United States) resources
