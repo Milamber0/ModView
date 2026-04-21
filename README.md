@@ -1,8 +1,19 @@
-# ModView 3
+<p align="center">
+  <img src="https://i.imgur.com/odgNk0t.png" alt="ModView 3">
+</p>
 
-Raven Software's ModView model viewer for Jedi Outcast and Jedi Academy (`.glm`/`.gla`), heavily modified since the 2.1 source release. **This is not the original source code** — it's a community fork with a modernised build system, a much deeper renderer, animation-event and particle support, and a lot of quality-of-life fixes.
+### Foreword/Disclaimer
 
-Credit: original tool written by Ste Cork at Raven Software (with MFC help from Mike Crowns). Ongoing work by Milamber.
+This tool was mostly updated through the use of Claude Code, this is an update I've wanted since the day I used ModView for the first time with a skin/model that had a very visual shader, but it's felt like too much work to spend a lot of time to make it. Without Claude Code I would not have bothered taking the effort to finally make it, or be willing to maintain it.
+
+--- 
+
+\
+\
+Raven Software's ModView model viewer for Jedi Outcast and Jedi Academy (`.glm`/`.gla`), heavily modified since the 2.1 source release. **This is not the original source code** — it's a community fork with a modernised build system, a much deeper renderer, animation-event and particle support, and some quality-of-life fixes.
+
+
+See the [Gallery](#gallery) for video clips of the features in action.
 
 ---
 
@@ -10,7 +21,7 @@ Credit: original tool written by Ste Cork at Raven Software (with MFC help from 
 
 1. Grab the latest release's `ModView.exe` from the [Releases page](../../releases).
 2. Drop it somewhere — it's self-contained, nothing else to install.
-3. Open any `.glm` (character, weapon, prop) from your Jedi Academy / Outcast `base` folder. The tool finds the rest of the gamedir automatically from the path.
+3. Open any `.glm` (character, weapon, prop) from your Jedi Academy / Outcast `base` folder. The tool finds the rest of the gamedir automatically from the path. (I suggest extracting the assets pk3 files in a base folder somewhere)
 
 Everything below describes what's been added on top of Raven's 2.1 baseline.
 
@@ -55,20 +66,13 @@ Everything below describes what's been added on top of Raven's 2.1 baseline.
 
 ### Configuration keys / hotkeys reference
 
-| Shortcut | Action |
+| New Shortcuts | Action |
 |---|---|
-| `Ctrl+O` | Open model |
+| `Ctrl+F` | Search animations |
 | `Ctrl+Q` | Toggle shader rendering |
 | `Ctrl+M` | Toggle shader animation |
 | `Ctrl+Y` | Toggle glow debug view |
-| `Ctrl+W` | Wireframe mode |
-| `Ctrl+L` | Toggle floor |
-| `Ctrl+F` | Search animations |
-| `Ctrl+H` | Force-white texture mode |
-| `Ctrl+R` | Ruler |
-| `Ctrl+D` | Cycle FOV |
-| `Ctrl+N` | Toggle interpolation |
-| `Ctrl+←` | Slow animation |
+| `Shift+C` | Transparent screenshot |
 
 ---
 
@@ -79,16 +83,72 @@ cmake -S . -B build -A Win32
 cmake --build build --config Release
 ```
 
-The resulting exe lands at `Build/ModView.exe`. To build with an explicit release version number:
-
-```bash
-cmake -S . -B build -A Win32 -DMODVIEW_VERSION_STRING=3.5
-```
-
-Without the flag, local builds use `3.0-dev` so you can tell them apart from real CI releases.
+The resulting exe lands at `Build/ModView.exe`.
 
 ---
 
+## Gallery
+
+<table align="center">
+  <tr>
+    <td align="center" valign="top">
+      <a href="https://imgur.com/5ZJKdtg" title="ModView 3 in action - click to open">
+        <video src="https://i.imgur.com/5ZJKdtg.mp4" height="260" autoplay loop muted playsinline></video>
+      </a>
+      <br><sub>Shaders, animation finder, weapon/saber menu, ingame saber blades, efx</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="https://imgur.com/7bPS8xF" title="Shader system and dynamic glow - click to open">
+        <video src="https://i.imgur.com/7bPS8xF.mp4" height="260" autoplay loop muted playsinline></video>
+      </a>
+      <br><sub>Advanced shaders</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="https://imgur.com/eq2TWaN" title="animevents.cfg and .efx particles - click to open">
+        <video src="https://i.imgur.com/eq2TWaN.mp4" height="260" autoplay loop muted playsinline></video>
+      </a>
+      <br><sub>Dynamic Glow</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <a href="https://imgur.com/jx2qKuB" title="Weapons dialog / saber picker - click to open">
+        <video src="https://i.imgur.com/jx2qKuB.mp4" height="260" autoplay loop muted playsinline></video>
+      </a>
+      <br><sub>Vertex deformation</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="https://i.imgur.com/qp1hnZH.png" title="Click for full-resolution transparent PNG">
+        <img src="https://i.imgur.com/qp1hnZHl.png" alt="Character pose, transparent PNG" height="260">
+      </a>
+      <br><sub>Transparent PNG export #1</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="https://i.imgur.com/NaAkjdg.png" title="Click for full-resolution transparent PNG">
+        <img src="https://i.imgur.com/NaAkjdgl.png" alt="Wide scene with bolted saber, transparent PNG" height="260">
+      </a>
+      <br><sub>Transparent PNG export #2</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## Credits
+
+### Maintainers
+- Milamber
+- Claude Code
+
+### Contributors
+- original tool written by Ste Cork at Raven Software (with MFC help from Mike Crowns). 
+- DT85 for the original fork.
+
+### feedback/testers
+- Ashura
+- Atlas
+- Sha
+
 ## Contributing
 
-Bug reports and PRs welcome on the [Issues page](../../issues). Because this fork has drifted significantly from Raven's 2.1 baseline, upstream patches rarely apply cleanly — treat this as its own project rather than a downstream.
+Bug reports and PRs welcome on the [Issues page](../../issues). Because this fork has drifted significantly from Raven's 2.1 baseline or DT85's repo, consider it a separate project.
