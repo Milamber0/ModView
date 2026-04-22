@@ -1,4 +1,21 @@
 #################
+## CMake / Visual Studio build output
+#################
+
+# CMake picks the generator's binary dir; the conventional names are build/
+# and variations. None of the contents belong in source control - everything
+# is regenerated from CMakeLists.txt.
+build/
+build-*/
+out/
+cmake-build-*/
+
+# Per-user Visual Studio state - generated when someone opens a .sln in VS
+*.vcxproj.user
+*.sln.docstates
+.vs/
+
+#################
 ## Eclipse
 #################
 
