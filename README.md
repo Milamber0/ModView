@@ -102,31 +102,23 @@ The resulting exe lands at `Build/ModView.exe`.
 <table align="center">
   <tr>
     <td align="center" valign="top" width="33%">
-
-https://github.com/user-attachments/assets/6b659b9e-8928-4404-9733-7bd42b047a64
-
-<sub>Shaders, animation finder, weapon/saber menu, ingame saber blades, efx</sub>
-</td>
+      <video src="https://github.com/user-attachments/assets/6b659b9e-8928-4404-9733-7bd42b047a64" width="100%" autoplay loop muted playsinline></video>
+      <br><sub>Shaders, animation finder, weapon/saber menu, ingame saber blades, efx</sub>
+    </td>
     <td align="center" valign="top" width="33%">
-
-https://github.com/user-attachments/assets/5424c4b7-adcd-400e-9429-edcc84828d73
-
-<sub>Advanced shaders</sub>
-</td>
+      <video src="https://github.com/user-attachments/assets/5424c4b7-adcd-400e-9429-edcc84828d73" width="100%" autoplay loop muted playsinline></video>
+      <br><sub>Advanced shaders</sub>
+    </td>
     <td align="center" valign="top" width="33%">
-
-https://github.com/user-attachments/assets/4c505a79-b815-4a80-9101-38d62feb1241
-
-<sub>Dynamic Glow</sub>
-</td>
+      <video src="https://github.com/user-attachments/assets/4c505a79-b815-4a80-9101-38d62feb1241" width="100%" autoplay loop muted playsinline></video>
+      <br><sub>Dynamic Glow</sub>
+    </td>
   </tr>
   <tr>
     <td align="center" valign="top" width="33%">
-
-https://github.com/user-attachments/assets/c6d056b9-b032-46fd-ad29-e466c53419c5
-
-<sub>Vertex deformation</sub>
-</td>
+      <video src="https://github.com/user-attachments/assets/c6d056b9-b032-46fd-ad29-e466c53419c5" width="100%" autoplay loop muted playsinline></video>
+      <br><sub>Vertex deformation</sub>
+    </td>
     <td align="center" valign="top" width="33%">
       <a href="https://i.imgur.com/qp1hnZH.png" title="Click for full-resolution transparent PNG">
         <img src="https://i.imgur.com/qp1hnZHl.png" alt="Character pose, transparent PNG">
