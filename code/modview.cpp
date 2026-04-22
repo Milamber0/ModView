@@ -89,6 +89,15 @@ bool bSafeToAddToMRU = false;
 bool gbMainFrameInitialised = false;
 BOOL CModViewApp::InitInstance()
 {
+	// Scan raw command-line for "-log" so we can gate debug file writers
+	// (modview_efx.log, shader_log.txt, etc.) behind an opt-in flag. Users
+	// who run ModView normally don't want these scratch files piling up
+	// next to the exe; devs debugging animevents / shaders pass -log to
+	// turn them back on.
+	if (m_lpCmdLine && strstr(m_lpCmdLine, "-log") != NULL) {
+		g_bLogDebug = true;
+	}
+
 	// CG: The following block was added by the Splash Screen component.
 \
 	{

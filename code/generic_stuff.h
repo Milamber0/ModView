@@ -8,6 +8,12 @@
 extern char qdir[];
 extern char	gamedir[];
 
+// True when the exe was launched with "-log" on the command line. Debug log
+// files (modview_efx.log, shader_log.txt, etc.) are only written when this
+// is set, so normal end-user runs don't leave scratch .txt/.log files next
+// to the exe. Flipped on by CModViewApp::InitInstance.
+extern bool	g_bLogDebug;
+
 void SetQdirFromPath( const char *path );
 // Extracts the "<drive>/.../base/" (or "/development/") prefix from a full
 // path into outGamedir without mutating the global `gamedir` or triggering

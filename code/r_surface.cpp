@@ -10,6 +10,7 @@
 #include "r_surface.h"
 #include "textures.h"
 #include "resource.h"
+#include "generic_stuff.h"	// g_bLogDebug
 #include <math.h>
 
 #ifndef M_PI
@@ -1365,10 +1366,20 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 				input->pRefEnt->pXFormedG2TagSurfs		[input->iSurfaceNum] = Jmatrix;
 				input->pRefEnt->pXFormedG2TagSurfsValid	[input->iSurfaceNum] = true;
 
-				{
+				// Tag-surface diagnostic log. Only emits when the exe was
+				// launched with "-log", and writes shader_log.txt next to
+				// the running exe (old code had the dev machine's absolute
+				// path baked in, which failed on any other machine).
+				if (g_bLogDebug) {
 					static int logCount = 0;
 					if (logCount < 50) {
-						FILE *f = fopen("C:\\Projects\\ModView\\shader_log.txt", logCount == 0 ? "w" : "a");
+						char exePath[MAX_PATH] = {0};
+						GetModuleFileName(NULL, exePath, MAX_PATH);
+						char *lastSlash = strrchr(exePath, '\\');
+						if (!lastSlash) lastSlash = strrchr(exePath, '/');
+						if (lastSlash) *(lastSlash + 1) = 0;
+						CString sLogPath = CString(exePath) + "shader_log.txt";
+						FILE *f = fopen(sLogPath, logCount == 0 ? "w" : "a");
 						if (f) {
 							LPCSTR name = Model_GetSurfaceName(input->hModel, input->iSurfaceNum);
 							fprintf(f, "Tag surf %d '%s' origin=(%.1f,%.1f,%.1f)\n",

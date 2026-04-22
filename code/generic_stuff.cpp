@@ -15,6 +15,7 @@
 //
 char		qdir[1024]={0};			// "S:\"
 char		gamedir[1024]={0};		// "S:\\baseq3\\"
+bool		g_bLogDebug = false;	// enabled by "-log" command-line flag; see generic_stuff.h
 
 // unlike "normal" SetQdirFromPath() functions, I need to see if qdir has changed 
 //	(ie by loading an EF model over an SOF model) which could mean that we're in a different dir, and so

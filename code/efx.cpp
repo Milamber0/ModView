@@ -15,6 +15,7 @@
 #include "shader.h"
 #include "textures.h"
 #include "files.h"
+#include "generic_stuff.h"	// g_bLogDebug
 #include "efx.h"
 
 #include <math.h>
@@ -124,6 +125,10 @@ static CString efx_logPath(void)
 
 static void efx_log(const char *fmt, ...)
 {
+	// Opt-in via the "-log" command-line flag. End users running ModView
+	// normally don't want this scratch file appearing next to the exe.
+	if (!g_bLogDebug) return;
+
 	char buf[1024];
 	va_list ap;
 	va_start(ap, fmt);
@@ -1363,7 +1368,9 @@ void Efx_Shutdown(void)
 	g_sEfxLastEffect[0]  = 0;
 	g_sEfxLastBolt[0]    = 0;
 
-	// Truncate the log so the next session starts with a clean file.
+	// Truncate the log so the next session starts with a clean file. Same
+	// gating as efx_log - don't create the file if debug logging is off.
+	if (!g_bLogDebug) return;
 	FILE *f = fopen(efx_logPath(), "w");
 	if (f) fclose(f);
 }

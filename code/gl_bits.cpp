@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "includes.h"
+#include "generic_stuff.h"	// g_bLogDebug
 //
 #include "gl_bits.h"
 
@@ -46,6 +47,27 @@ static int GLW_ChoosePFD( HDC hDC, PIXELFORMATDESCRIPTOR *pPFD )
 {
 	#define MAX_PFDS 256
 
+	// Historically this function both wrote a diagnostic log AND picked a
+	// "best match" PFD via Raven's custom scorer (which only weighs color
+	// bits and depth bits). Windows' ChoosePixelFormat is smarter - it
+	// balances the full set of fields including alpha bits, sRGB /
+	// framebuffer gamma, accumulation, swap method, etc. Raven's scorer
+	// tends to pick a technically-acceptable-but-visually-different PFD
+	// from what ChoosePixelFormat would, producing subtle brightness and
+	// gamma shifts in the viewport.
+	//
+	// The old code masked this bug by writing to "c:\\ModView_GL_report.txt"
+	// which silently failed on every non-dev machine, causing an early
+	// `return 0` and letting the caller fall through to ChoosePixelFormat.
+	// When we fixed the hardcoded path, the scorer started running for
+	// everyone and the rendering changed.
+	//
+	// Correct fix: keep the two concerns separate. ALWAYS return 0 so the
+	// caller always uses ChoosePixelFormat (the known-good path). Only
+	// write the diagnostic log when -log is set - it's purely informational
+	// and no longer affects what PFD we actually render against.
+	if (!g_bLogDebug) return 0;
+
 	PIXELFORMATDESCRIPTOR pfds[MAX_PFDS+1];
 	int maxPFD = 0;
 	int i;
@@ -65,7 +87,16 @@ static int GLW_ChoosePFD( HDC hDC, PIXELFORMATDESCRIPTOR *pPFD )
 
 	OutputDebugString( va("...%d PFDs found\n", maxPFD - 1) );
 
-	FILE *handle = fopen("c:\\ModView_GL_report.txt","wt");
+	// Write the pixel-format report next to the running exe rather than to
+	// C:\, which isn't user-writable on modern Windows without admin.
+	char sLogPath[MAX_PATH] = {0};
+	GetModuleFileName(NULL, sLogPath, MAX_PATH);
+	char *lastSlash = strrchr(sLogPath, '\\');
+	if (!lastSlash) lastSlash = strrchr(sLogPath, '/');
+	if (lastSlash) *(lastSlash + 1) = 0;
+	strncat(sLogPath, "ModView_GL_report.txt", MAX_PATH - strlen(sLogPath) - 1);
+
+	FILE *handle = fopen(sLogPath,"wt");
 	if ( !handle )
 		return 0;
 
@@ -282,11 +313,15 @@ static int GLW_ChoosePFD( HDC hDC, PIXELFORMATDESCRIPTOR *pPFD )
 			"...hardware acceleration found\n" );
 	}
 
-	*pPFD = pfds[bestMatch];
-
+	// Deliberately DO NOT write through *pPFD or return bestMatch - the
+	// scorer's pick can differ from ChoosePixelFormat in ways that affect
+	// rendering output. The log has served its diagnostic purpose; fall
+	// through to the caller's ChoosePixelFormat fallback like normal.
+	fprintf(handle, "(Not applying this pick - always using ChoosePixelFormat "
+					"to keep rendering identical with and without -log.)\n");
 	fclose(handle);
 
-	return bestMatch;
+	return 0;
 }
 
 
