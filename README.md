@@ -102,29 +102,21 @@ The resulting exe lands at `Build/ModView.exe`.
 <table align="center">
   <tr>
     <td align="center" valign="top">
-      <a href="https://imgur.com/5ZJKdtg" title="ModView 3 in action">
-        <img src="https://i.imgur.com/5ZJKdtg.gif" alt="ModView 3 in action" height="260">
-      </a>
+      <video src="https://github.com/user-attachments/assets/6b659b9e-8928-4404-9733-7bd42b047a64" height="260" autoplay loop muted playsinline controls></video>
       <br><sub>Shaders, animation finder, weapon/saber menu, ingame saber blades, efx</sub>
     </td>
     <td align="center" valign="top">
-      <a href="https://imgur.com/7bPS8xF" title="Shader system and dynamic glow">
-        <img src="https://i.imgur.com/7bPS8xF.gif" alt="Shader system and dynamic glow" height="260">
-      </a>
+      <video src="https://github.com/user-attachments/assets/5424c4b7-adcd-400e-9429-edcc84828d73" height="260" autoplay loop muted playsinline controls></video>
       <br><sub>Advanced shaders</sub>
     </td>
     <td align="center" valign="top">
-      <a href="https://imgur.com/eq2TWaN" title="animevents.cfg and .efx particles">
-        <img src="https://i.imgur.com/eq2TWaN.gif" alt="animevents and particles" height="260">
-      </a>
+      <video src="https://github.com/user-attachments/assets/4c505a79-b815-4a80-9101-38d62feb1241" height="260" autoplay loop muted playsinline controls></video>
       <br><sub>Dynamic Glow</sub>
     </td>
   </tr>
   <tr>
     <td align="center" valign="top">
-      <a href="https://imgur.com/jx2qKuB" title="Weapons dialog / saber picker">
-        <img src="https://i.imgur.com/jx2qKuB.gif" alt="Weapons dialog and live saber color preview" height="260">
-      </a>
+      <video src="https://github.com/user-attachments/assets/c6d056b9-b032-46fd-ad29-e466c53419c5" height="260" autoplay loop muted playsinline controls></video>
       <br><sub>Vertex deformation</sub>
     </td>
     <td align="center" valign="top">
