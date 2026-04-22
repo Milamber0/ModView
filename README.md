@@ -103,19 +103,19 @@ The resulting exe lands at `Build/ModView.exe`.
   <tr>
     <td align="center" valign="top" width="33%">
 
-![Shaders, animation finder, weapon/saber menu, ingame saber blades, efx](https://github.com/user-attachments/assets/6b659b9e-8928-4404-9733-7bd42b047a64)
+https://github.com/user-attachments/assets/6b659b9e-8928-4404-9733-7bd42b047a64
 
 <sub>Shaders, animation finder, weapon/saber menu, ingame saber blades, efx</sub>
 </td>
     <td align="center" valign="top" width="33%">
 
-![Advanced shaders](https://github.com/user-attachments/assets/5424c4b7-adcd-400e-9429-edcc84828d73)
+https://github.com/user-attachments/assets/5424c4b7-adcd-400e-9429-edcc84828d73
 
 <sub>Advanced shaders</sub>
 </td>
     <td align="center" valign="top" width="33%">
 
-![Dynamic Glow](https://github.com/user-attachments/assets/4c505a79-b815-4a80-9101-38d62feb1241)
+https://github.com/user-attachments/assets/4c505a79-b815-4a80-9101-38d62feb1241
 
 <sub>Dynamic Glow</sub>
 </td>
@@ -123,7 +123,7 @@ The resulting exe lands at `Build/ModView.exe`.
   <tr>
     <td align="center" valign="top" width="33%">
 
-![Vertex deformation](https://github.com/user-attachments/assets/c6d056b9-b032-46fd-ad29-e466c53419c5)
+https://github.com/user-attachments/assets/c6d056b9-b032-46fd-ad29-e466c53419c5
 
 <sub>Vertex deformation</sub>
 </td>
