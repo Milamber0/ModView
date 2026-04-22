@@ -80,6 +80,52 @@ void RE_ResetSaberBladeTextureCache(void)
 	if (g_saberTexSets[6].core) { glDeleteTextures(1, &g_saberTexSets[6].core); }
 	for (int c = 0; c < 7; c++) { g_saberTexSets[c].glow = 0; g_saberTexSets[c].core = 0; }
 	g_saberTexLoaded = false;
+
+	// Asset-availability cache (see RE_PresetSaberAssetsAvailable) is scoped
+	// to the current gamedir - flush it too so a gamedir change re-probes.
+	extern void RE_InvalidatePresetSaberAssetCache(void);
+	RE_InvalidatePresetSaberAssetCache();
+}
+
+// Do the preset saber blade textures (gfx/effects/sabers/blue_glow2 etc.)
+// actually exist in the currently-active gamedir? JKA ships these inside
+// the base .pk3s so a user who has the tool but hasn't extracted the
+// assets sees every preset color render as white. When presets aren't
+// available we restrict the UI / render path to the custom/RGB color only
+// (whose textures are bundled in the exe as RCDATA - see
+// RE_LoadBundledBlendTexture).
+//
+// Lazy-cached because probing the disk every frame would be wasteful;
+// invalidated on gamedir change via the reset hook above.
+static int g_iSaberPresetAssetsAvailable = -1;	// -1 = unknown, 0 = no, 1 = yes
+
+void RE_InvalidatePresetSaberAssetCache(void)
+{
+	g_iSaberPresetAssetsAvailable = -1;
+}
+
+bool RE_PresetSaberAssetsAvailable(void)
+{
+	if (g_iSaberPresetAssetsAvailable != -1) {
+		return g_iSaberPresetAssetsAvailable == 1;
+	}
+
+	// Probe with blue_glow2 as the canonical preset. Try the three
+	// extensions the game uses (JKA actually ships these as .jpg).
+	if (!gamedir[0]) return false;	// no gamedir yet - don't cache
+
+	static const char *sExts[] = { ".jpg", ".tga", ".png" };
+	bool bFound = false;
+	for (int i = 0; i < 3 && !bFound; i++) {
+		char sFull[1024];
+		_snprintf(sFull, sizeof(sFull) - 1,
+				  "%sgfx/effects/sabers/blue_glow2%s", gamedir, sExts[i]);
+		sFull[sizeof(sFull) - 1] = '\0';
+		if (FileExists(sFull)) bFound = true;
+	}
+
+	g_iSaberPresetAssetsAvailable = bFound ? 1 : 0;
+	return bFound;
 }
 
 // Saved primary model state for the glow pass (survives per-container reset)
@@ -1829,6 +1875,16 @@ void RE_DrawSaberBlades( bool bGlowOnly )
 		// Determine saber color
 		int colorIdx = AppVars.saberColorIndex[hand];
 		if (colorIdx < 0 || colorIdx > 6) colorIdx = 0;
+
+		// If the current gamedir lacks the preset saber textures, force to
+		// custom so the bundled blend textures take over. A scene restored
+		// from a previous install (where assets WERE extracted) can leave
+		// a preset index sitting in AppVars that the dialog no longer
+		// exposes; without this remap, the blade would render as missing-
+		// texture white because the _glow2/_line file isn't on disk.
+		if (colorIdx < 6 && !RE_PresetSaberAssetsAvailable()) {
+			colorIdx = 6;
+		}
 
 		// For preset colors, the texture is pre-colored so tint white.
 		// For custom (index 6), the blend texture is neutral so tint with custom RGB.

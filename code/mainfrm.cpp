@@ -867,14 +867,26 @@ protected:
 	void PopulateColorCombo(int nID, int sel) {
 		CComboBox *pCombo = (CComboBox*)GetDlgItem(nID);
 		if (!pCombo) return;
-		pCombo->AddString("Blue");
-		pCombo->AddString("Green");
-		pCombo->AddString("Yellow");
-		pCombo->AddString("Orange");
-		pCombo->AddString("Red");
-		pCombo->AddString("Purple");
+		// Preset color textures come from the user's extracted JKA assets.
+		// If they're missing, only the custom/RGB path works (its textures
+		// are bundled in the exe), so restrict the combo to that option.
+		extern bool RE_PresetSaberAssetsAvailable(void);
+		bool bPresets = RE_PresetSaberAssetsAvailable();
+		if (bPresets) {
+			pCombo->AddString("Blue");
+			pCombo->AddString("Green");
+			pCombo->AddString("Yellow");
+			pCombo->AddString("Orange");
+			pCombo->AddString("Red");
+			pCombo->AddString("Purple");
+		}
 		pCombo->AddString("Custom...");
-		pCombo->SetCurSel(sel);
+		// The combo is always 0-indexed - map the stored color index onto the
+		// available entries. When presets are missing, everything is forced
+		// to the (only) entry 0, which we also remap to AppVars index 6.
+		int shownSel = bPresets ? sel : 0;
+		if (shownSel < 0) shownSel = 0;
+		pCombo->SetCurSel(shownSel);
 	}
 
 	virtual BOOL OnInitDialog() {
@@ -963,8 +975,10 @@ protected:
 			return TRUE;
 
 		case IDC_SABER_RCOLOR: {
+			extern bool RE_PresetSaberAssetsAvailable(void);
 			AppVars.saberColorIndex[0] = 6;  // switch to custom
-			((CComboBox*)GetDlgItem(IDC_SABER_RCOMBO))->SetCurSel(6);
+			// Combo has 7 entries when presets are available, 1 otherwise.
+			((CComboBox*)GetDlgItem(IDC_SABER_RCOMBO))->SetCurSel(RE_PresetSaberAssetsAvailable() ? 6 : 0);
 			CLiveSaberColorDialog dlg(RGB(AppVars.saberCustomColor[0][0], AppVars.saberCustomColor[0][1], AppVars.saberCustomColor[0][2]), CC_FULLOPEN | CC_RGBINIT, this, 0);
 			INT_PTR result = dlg.DoModal();
 			if (result == IDOK) {
@@ -980,8 +994,9 @@ protected:
 			return TRUE;
 		}
 		case IDC_SABER_LCOLOR: {
+			extern bool RE_PresetSaberAssetsAvailable(void);
 			AppVars.saberColorIndex[1] = 6;
-			((CComboBox*)GetDlgItem(IDC_SABER_LCOMBO))->SetCurSel(6);
+			((CComboBox*)GetDlgItem(IDC_SABER_LCOMBO))->SetCurSel(RE_PresetSaberAssetsAvailable() ? 6 : 0);
 			CLiveSaberColorDialog dlg(RGB(AppVars.saberCustomColor[1][0], AppVars.saberCustomColor[1][1], AppVars.saberCustomColor[1][2]), CC_FULLOPEN | CC_RGBINIT, this, 1);
 			INT_PTR result = dlg.DoModal();
 			if (result == IDOK) {
@@ -998,18 +1013,31 @@ protected:
 
 		case IDC_SABER_RCOMBO:
 			if (HIWORD(wParam) == CBN_SELCHANGE) {
-				AppVars.saberColorIndex[0] = ((CComboBox*)GetDlgItem(IDC_SABER_RCOMBO))->GetCurSel();
+				int combo = ((CComboBox*)GetDlgItem(IDC_SABER_RCOMBO))->GetCurSel();
+				AppVars.saberColorIndex[0] = ComboSelToColorIndex(combo);
 				GetParent()->Invalidate(false);
 			}
 			return TRUE;
 		case IDC_SABER_LCOMBO:
 			if (HIWORD(wParam) == CBN_SELCHANGE) {
-				AppVars.saberColorIndex[1] = ((CComboBox*)GetDlgItem(IDC_SABER_LCOMBO))->GetCurSel();
+				int combo = ((CComboBox*)GetDlgItem(IDC_SABER_LCOMBO))->GetCurSel();
+				AppVars.saberColorIndex[1] = ComboSelToColorIndex(combo);
 				GetParent()->Invalidate(false);
 			}
 			return TRUE;
 		}
 		return CDialog::OnCommand(wParam, lParam);
+	}
+
+	// Map a combo-box selection index back to the stored AppVars color
+	// index (0..6). When preset assets are present the combo has 7 entries
+	// and it's the identity mapping. When presets are absent the combo has
+	// only the "Custom..." entry (sel = 0), which must map to AppVars index
+	// 6 (the custom slot).
+	int ComboSelToColorIndex(int sel) {
+		extern bool RE_PresetSaberAssetsAvailable(void);
+		if (!RE_PresetSaberAssetsAvailable()) return 6;
+		return sel;
 	}
 
 	virtual void OnCancel() { DestroyWindow(); }
