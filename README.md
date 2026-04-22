@@ -101,33 +101,41 @@ The resulting exe lands at `Build/ModView.exe`.
 
 <table align="center">
   <tr>
-    <td align="center" valign="top">
-      <video src="https://github.com/user-attachments/assets/6b659b9e-8928-4404-9733-7bd42b047a64" height="260" autoplay loop muted playsinline controls></video>
-      <br><sub>Shaders, animation finder, weapon/saber menu, ingame saber blades, efx</sub>
-    </td>
-    <td align="center" valign="top">
-      <video src="https://github.com/user-attachments/assets/5424c4b7-adcd-400e-9429-edcc84828d73" height="260" autoplay loop muted playsinline controls></video>
-      <br><sub>Advanced shaders</sub>
-    </td>
-    <td align="center" valign="top">
-      <video src="https://github.com/user-attachments/assets/4c505a79-b815-4a80-9101-38d62feb1241" height="260" autoplay loop muted playsinline controls></video>
-      <br><sub>Dynamic Glow</sub>
-    </td>
+    <td align="center" valign="top" width="33%">
+
+![Shaders, animation finder, weapon/saber menu, ingame saber blades, efx](https://github.com/user-attachments/assets/6b659b9e-8928-4404-9733-7bd42b047a64)
+
+<sub>Shaders, animation finder, weapon/saber menu, ingame saber blades, efx</sub>
+</td>
+    <td align="center" valign="top" width="33%">
+
+![Advanced shaders](https://github.com/user-attachments/assets/5424c4b7-adcd-400e-9429-edcc84828d73)
+
+<sub>Advanced shaders</sub>
+</td>
+    <td align="center" valign="top" width="33%">
+
+![Dynamic Glow](https://github.com/user-attachments/assets/4c505a79-b815-4a80-9101-38d62feb1241)
+
+<sub>Dynamic Glow</sub>
+</td>
   </tr>
   <tr>
-    <td align="center" valign="top">
-      <video src="https://github.com/user-attachments/assets/c6d056b9-b032-46fd-ad29-e466c53419c5" height="260" autoplay loop muted playsinline controls></video>
-      <br><sub>Vertex deformation</sub>
-    </td>
-    <td align="center" valign="top">
+    <td align="center" valign="top" width="33%">
+
+![Vertex deformation](https://github.com/user-attachments/assets/c6d056b9-b032-46fd-ad29-e466c53419c5)
+
+<sub>Vertex deformation</sub>
+</td>
+    <td align="center" valign="top" width="33%">
       <a href="https://i.imgur.com/qp1hnZH.png" title="Click for full-resolution transparent PNG">
-        <img src="https://i.imgur.com/qp1hnZHl.png" alt="Character pose, transparent PNG" height="260">
+        <img src="https://i.imgur.com/qp1hnZHl.png" alt="Character pose, transparent PNG">
       </a>
       <br><sub>Transparent PNG export #1</sub>
     </td>
-    <td align="center" valign="top">
+    <td align="center" valign="top" width="33%">
       <a href="https://i.imgur.com/NaAkjdg.png" title="Click for full-resolution transparent PNG">
-        <img src="https://i.imgur.com/NaAkjdgl.png" alt="Wide scene with bolted saber, transparent PNG" height="260">
+        <img src="https://i.imgur.com/NaAkjdgl.png" alt="Wide scene with bolted saber, transparent PNG">
       </a>
       <br><sub>Transparent PNG export #2</sub>
     </td>
