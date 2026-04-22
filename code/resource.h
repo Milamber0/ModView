@@ -217,6 +217,7 @@
 #define IDC_SABER_RCOMBO                1031
 #define IDC_SABER_LCOMBO                1032
 #define IDC_SABER_COLLISION_FX          1033
+#define IDC_SABER_FIX_SPARKS_OFFSET     1034
 #define ID_WEAPON_FIRST                 33000
 #define ID_WEAPON_LAST                  33500
 #define IDD_ANIM_SEARCH                 161

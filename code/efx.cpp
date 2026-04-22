@@ -663,6 +663,23 @@ static void efx_spawnBurst(ModelContainer_t *pContainer, const char *psEffectPat
 		? &g_RelativeByContainer[pContainer]
 		: &g_WorldParticles;
 
+	// "Fix sparks offset on animevents bug" - the stock saber_clash.efx
+	// ships with `origin 0 -20 0` which pushes the sparks 20 units down
+	// the blade-local Z axis, landing them well off the blade with the
+	// animevent-driven axis. When the user opts into the fix we force
+	// the per-particle origin offset to zero for saber_clash.efx only,
+	// so the effect spawns at the bolt point itself. Applied only at the
+	// top-level burst - chained children (e.g. volumetric/smoke.efx via
+	// FxRunner) keep their authored offsets.
+	bool bForceZeroOrigin = false;
+	if (AppVars.bFixSaberClashOffset && psEffectPath) {
+		// Match "saber_clash" anywhere in the path so "saber_clash",
+		// "saber/saber_clash", or a ".efx"-suffixed variant all hit.
+		const char *slash = strrchr(psEffectPath, '/');
+		const char *name = slash ? slash + 1 : psEffectPath;
+		if (_strnicmp(name, "saber_clash", 11) == 0) bForceZeroOrigin = true;
+	}
+
 	bool bLoggedFirst = false;
 
 	for (size_t p = 0; p < fx->Primitives.size(); p++) {
@@ -698,6 +715,7 @@ static void efx_spawnBurst(ModelContainer_t *pContainer, const char *psEffectPat
 			float vOriginLocal[3], vVelLocal[3];
 			for (int k = 0; k < 3; k++) vOriginLocal[k] = efx_randFloat(pd.vOriginMin[k], pd.vOriginMax[k]);
 			for (int k = 0; k < 3; k++) vVelLocal[k]    = efx_randFloat(pd.vVelMin[k],    pd.vVelMax[k]);
+			if (bForceZeroOrigin) { vOriginLocal[0] = vOriginLocal[1] = vOriginLocal[2] = 0.0f; }
 
 			// Sphere-spawn: pick a random point on a sphere of fSphereRadius
 			// around the bolt origin (Tail primitives with spawnflags

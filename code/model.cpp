@@ -345,6 +345,7 @@ void AppVars_OnceOnlyInit(void)
 	AppVars.saberCustomColor[1][0] = 255; AppVars.saberCustomColor[1][1] = 255; AppVars.saberCustomColor[1][2] = 255;
 	AppVars.saberLength			=	40.0f;
 	AppVars.bSaberCollisionFX	=	true;
+	AppVars.bFixSaberClashOffset	=	true;	// default on - the stock `origin 0 -20 0` lands off the blade; zeroing it is almost always what users want
 	AppVars.bUseAlpha			=	false;
 	AppVars.bUseAlphaMode2		=	false;
 	AppVars.bWireFrame			=	false;

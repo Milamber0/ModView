@@ -894,6 +894,7 @@ protected:
 		CheckDlgButton(IDC_SABER_RBLADE, AppVars.bSaberBlade[0] ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(IDC_SABER_LBLADE, AppVars.bSaberBlade[1] ? BST_CHECKED : BST_UNCHECKED);
 		CheckDlgButton(IDC_SABER_COLLISION_FX, AppVars.bSaberCollisionFX ? BST_CHECKED : BST_UNCHECKED);
+		CheckDlgButton(IDC_SABER_FIX_SPARKS_OFFSET, AppVars.bFixSaberClashOffset ? BST_CHECKED : BST_UNCHECKED);
 
 		PopulateColorCombo(IDC_SABER_RCOMBO, AppVars.saberColorIndex[0]);
 		PopulateColorCombo(IDC_SABER_LCOMBO, AppVars.saberColorIndex[1]);
@@ -953,6 +954,11 @@ protected:
 
 		case IDC_SABER_COLLISION_FX:
 			AppVars.bSaberCollisionFX = (IsDlgButtonChecked(IDC_SABER_COLLISION_FX) == BST_CHECKED);
+			GetParent()->Invalidate(false);
+			return TRUE;
+
+		case IDC_SABER_FIX_SPARKS_OFFSET:
+			AppVars.bFixSaberClashOffset = (IsDlgButtonChecked(IDC_SABER_FIX_SPARKS_OFFSET) == BST_CHECKED);
 			GetParent()->Invalidate(false);
 			return TRUE;
 

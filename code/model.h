@@ -276,6 +276,7 @@ typedef struct
 	byte	saberCustomColor[2][3]; // custom RGB when index==6
 	float	saberLength;		// blade length (game units)
 	bool	bSaberCollisionFX;	// spawn saber_block / saber_cut sparks on blade-blade / blade-floor contact
+	bool	bFixSaberClashOffset;	// zero the per-particle origin offset on saber_clash.efx so it spawns on the blade instead of 20u below it. Works around the well-known 'origin 0 -20 0' baseline without editing the asset.
 	bool	bUseAlpha;
 	bool	bUseAlphaMode2;
 	bool	bWireFrame;
