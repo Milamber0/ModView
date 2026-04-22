@@ -146,10 +146,13 @@ jobs:
           mkdir -p dist
           # CMakeLists sets CMAKE_RUNTIME_OUTPUT_DIRECTORY to <src>/Build, so
           # the exe lands at the repo root's Build/ regardless of where we
-          # configure. Copy the README in case release-goers want the
-          # introduction text alongside the exe.
+          # configure. Copy the README alongside so release-goers have the
+          # intro text, plus LICENSE + NOTICE for GPLv2 compliance - every
+          # distributed binary needs the license text next to it.
           cp Build/ModView.exe dist/
           cp README.md dist/ 2>/dev/null || true
+          cp LICENSE dist/ 2>/dev/null || true
+          cp NOTICE.md dist/ 2>/dev/null || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
