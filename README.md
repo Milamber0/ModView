@@ -21,7 +21,17 @@ See the [Gallery](#gallery) for video clips of the features in action.
 
 1. Grab the latest release's `ModView.exe` from the [Releases page](../../releases).
 2. Drop it somewhere — it's self-contained, nothing else to install.
-3. Open any `.glm` (character, weapon, prop) from your Jedi Academy / Outcast `base` folder. The tool finds the rest of the gamedir automatically from the path. (I suggest extracting the assets pk3 files in a base folder somewhere)
+3. Open any `.glm` (character, weapon, prop) from your Jedi Academy / Outcast `base` folder. The tool finds the rest of the gamedir automatically from the path.
+
+> **You need to extract the base `.pk3` assets.** ModView reads textures, shaders, animevents, and saber blade textures straight off disk — it does not read from `.pk3` archives. Extract `assets0.pk3` / `assets1.pk3` / `assets2.pk3` / `assets3.pk3` into a `base/` folder next to a `ModView.exe` (or anywhere with the right directory layout) and point the tool at a model inside that tree. Without the extracted assets:
+>
+> - Models load but render missing-texture white.
+> - Shader stages, glow, animation events, and `.efx` particles have nothing to resolve against.
+> - Preset saber blade colors (blue / green / yellow / orange / red / purple) won't work, and the Weapons & Lightsabers dialog will only offer the bundled **Custom (RGB)** color — ModView ships its own `blend_*` blade textures inside the exe specifically so the custom-color picker works without any assets extracted.
+
+### Heads-up: update check on startup
+
+ModView checks its GitHub releases page on startup to see if a newer version is out. The update prompt has a **"Don't remind me about this version again"** checkbox if you'd rather stay on the current build, and the check is skipped entirely for local `-dev` builds. The endpoint is `api.github.com/repos/Milamber0/ModView/releases/latest` — nothing else leaves the machine.
 
 Everything below describes what's been added on top of Raven's 2.1 baseline.
 
