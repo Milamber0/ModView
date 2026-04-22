@@ -102,28 +102,28 @@ The resulting exe lands at `Build/ModView.exe`.
 <table align="center">
   <tr>
     <td align="center" valign="top">
-      <a href="https://imgur.com/5ZJKdtg" title="ModView 3 in action - click to open">
-        <video src="https://i.imgur.com/5ZJKdtg.mp4" height="260" autoplay loop muted playsinline></video>
+      <a href="https://imgur.com/5ZJKdtg" title="ModView 3 in action">
+        <img src="https://i.imgur.com/5ZJKdtg.gif" alt="ModView 3 in action" height="260">
       </a>
       <br><sub>Shaders, animation finder, weapon/saber menu, ingame saber blades, efx</sub>
     </td>
     <td align="center" valign="top">
-      <a href="https://imgur.com/7bPS8xF" title="Shader system and dynamic glow - click to open">
-        <video src="https://i.imgur.com/7bPS8xF.mp4" height="260" autoplay loop muted playsinline></video>
+      <a href="https://imgur.com/7bPS8xF" title="Shader system and dynamic glow">
+        <img src="https://i.imgur.com/7bPS8xF.gif" alt="Shader system and dynamic glow" height="260">
       </a>
       <br><sub>Advanced shaders</sub>
     </td>
     <td align="center" valign="top">
-      <a href="https://imgur.com/eq2TWaN" title="animevents.cfg and .efx particles - click to open">
-        <video src="https://i.imgur.com/eq2TWaN.mp4" height="260" autoplay loop muted playsinline></video>
+      <a href="https://imgur.com/eq2TWaN" title="animevents.cfg and .efx particles">
+        <img src="https://i.imgur.com/eq2TWaN.gif" alt="animevents and particles" height="260">
       </a>
       <br><sub>Dynamic Glow</sub>
     </td>
   </tr>
   <tr>
     <td align="center" valign="top">
-      <a href="https://imgur.com/jx2qKuB" title="Weapons dialog / saber picker - click to open">
-        <video src="https://i.imgur.com/jx2qKuB.mp4" height="260" autoplay loop muted playsinline></video>
+      <a href="https://imgur.com/jx2qKuB" title="Weapons dialog / saber picker">
+        <img src="https://i.imgur.com/jx2qKuB.gif" alt="Weapons dialog and live saber color preview" height="260">
       </a>
       <br><sub>Vertex deformation</sub>
     </td>
