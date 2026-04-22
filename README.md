@@ -33,6 +33,16 @@ See the [Gallery](#gallery) for video clips of the features in action.
 
 ModView checks its GitHub releases page on startup to see if a newer version is out. The update prompt has a **"Don't remind me about this version again"** checkbox if you'd rather stay on the current build, and the check is skipped entirely for local `-dev` builds. The endpoint is `api.github.com/repos/Milamber0/ModView/releases/latest` — nothing else leaves the machine.
 
+### Troubleshooting: ModView freezes on startup unless launched as admin
+
+Almost always caused by an **audio-overlay hook** (MSI / Realtek Nahimic's `NahimicOSD.dll`, or occasionally SteelSeries GG, Razer Synapse, or Asus Sonic Studio). These tools inject themselves into every graphical process to draw their own on-screen display, and that hook can deadlock ModView's OpenGL `SwapBuffers` path on some driver versions. Running as administrator sidesteps the hook because of integrity-level rules — hence the symptom.
+
+Fixes, in order of how invasive:
+
+1. **Add `ModView.exe` to the audio software's exclusion list.** In Nahimic / MSI Center open the audio tab, find "Game Visualizer" or "Application List", and add ModView with the hook disabled. Same idea for other overlay tools.
+2. **Turn off the on-screen-display globally.** Most of these tools have a single toggle for their overlay; flipping it off stops the DLL injection.
+3. **Uninstall the audio software entirely** via Programs & Features if you don't use its features.
+
 Everything below describes what's been added on top of Raven's 2.1 baseline.
 
 ---
