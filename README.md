@@ -130,6 +130,13 @@ The resulting exe lands at `Build/ModView.exe`.
       <br><sub>Vertex deformation</sub>
     </td>
     <td align="center" valign="top" width="33%">
+      <video src="https://github.com/user-attachments/assets/71d523f8-10aa-488c-a386-3ab675a7b7bd" width="100%" autoplay loop muted playsinline></video>
+      <br><sub>RGB character support</sub>
+    </td>
+    <td align="center" valign="top" width="33%"></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top" width="33%">
       <a href="https://i.imgur.com/qp1hnZH.png" title="Click for full-resolution transparent PNG">
         <img src="https://i.imgur.com/qp1hnZHl.png" alt="Character pose, transparent PNG">
       </a>
@@ -141,6 +148,7 @@ The resulting exe lands at `Build/ModView.exe`.
       </a>
       <br><sub>Transparent PNG export #2</sub>
     </td>
+    <td align="center" valign="top" width="33%"></td>
   </tr>
 </table>
 
